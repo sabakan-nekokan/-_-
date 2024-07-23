@@ -17,7 +17,6 @@ function transferAndUpdateData() {
   var updatedRows = 0;
   var addedRows = 0;
   
-  // 新しい行を追加するための配列
   var newRows = [];
 
   for (var i = 1; i < dataA.length; i++) {
@@ -25,7 +24,6 @@ function transferAndUpdateData() {
     var idA = rowA[idIndexA];
     var remarkA = rowA[remarkIndexA];
     
-    // 備考欄に値がある場合のみ処理（空白文字のみの場合も除外）
     if (remarkA && remarkA.trim() !== "") {
       var foundIndex = -1;
       for (var j = 1; j < dataB.length; j++) {
@@ -35,6 +33,8 @@ function transferAndUpdateData() {
         }
       }
       
+      var timestamp = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM");
+      
       if (foundIndex !== -1) {
         // 既存の行を更新
         for (var k = 0; k < headerA.length; k++) {
@@ -43,8 +43,8 @@ function transferAndUpdateData() {
           }
         }
         var existingRemark = dataB[foundIndex][remarkIndexB];
-        var newRemark = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM") + "\n" + remarkA;
-        sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(existingRemark + "\n" + newRemark);
+        var newRemark = timestamp + " " + remarkA + "\n" + existingRemark;
+        sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(newRemark);
         updatedRows++;
       } else {
         // 新しい行を追加用の配列に追加
@@ -52,7 +52,7 @@ function transferAndUpdateData() {
         for (var k = 0; k < headerA.length; k++) {
           newRow[k] = rowA[k];
         }
-        newRow[remarkIndexB] = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM") + "\n" + remarkA;
+        newRow[remarkIndexB] = timestamp + " " + remarkA;
         newRows.push(newRow);
         addedRows++;
       }
