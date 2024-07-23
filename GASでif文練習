@@ -16,6 +16,7 @@ function transferAndUpdateData() {
   
   var updatedRows = 0;
   var addedRows = 0;
+  var newRows = [];
   
   for (var i = 1; i < dataA.length; i++) {
     var rowA = dataA[i];
@@ -47,7 +48,7 @@ function transferAndUpdateData() {
         sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(newRemark + "\n" + existingRemark);
         updatedRows++;
       } else {
-        // 新しい行を追加
+        // 新しい行を追加用の配列に格納
         var newRow = new Array(headerB.length);
         for (var k = 0; k < headerA.length; k++) {
           if (k === remarkIndexB) {
@@ -56,10 +57,16 @@ function transferAndUpdateData() {
             newRow[k] = rowA[k];
           }
         }
-        sheetB.appendRow(newRow);
+        newRows.push(newRow);
         addedRows++;
       }
     }
+  }
+  
+  // 新しい行を最終行に一括追加
+  if (newRows.length > 0) {
+    var lastRow = sheetB.getLastRow();
+    sheetB.getRange(lastRow + 1, 1, newRows.length, headerB.length).setValues(newRows);
   }
   
   Logger.log("更新された行数: " + updatedRows);
