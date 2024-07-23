@@ -9,27 +9,27 @@ function compareAndUpdateSheets() {
   const headerA = dataA[0];
   const headerB = dataB[0];
   
-  const idIndexA = headerA.indexOf('ID');
-  const confirmIndexA = headerA.indexOf('確認');
-  const checkIndexA = headerA.indexOf('チェック');
+  const idColumnA = headerA.indexOf('ID');
+  const confirmColumnA = headerA.indexOf('確認');
+  const checkColumnA = headerA.indexOf('チェック');
   
-  const idIndexB = headerB.indexOf('ID');
-  const confirmIndexB = headerB.indexOf('確認');
+  const idColumnB = headerB.indexOf('ID');
+  const confirmColumnB = headerB.indexOf('確認');
   
   const currentDate = new Date();
   const currentMonth = Utilities.formatDate(currentDate, 'Asia/Tokyo', 'yyyy/MM');
   const lastMonth = Utilities.formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1), 'Asia/Tokyo', 'yyyy/MM');
   
   for (let i = 1; i < dataA.length; i++) {
-    const idA = dataA[i][idIndexA];
-    const confirmA = dataA[i][confirmIndexA];
+    const idA = dataA[i][idColumnA];
+    const confirmA = dataA[i][confirmColumnA];
     
-    const rowB = dataB.findIndex(row => row[idIndexB] === idA);
+    const rowB = dataB.findIndex(row => row[idColumnB] === idA);
     
     if (rowB !== -1) {
-      const confirmB = dataB[rowB][confirmIndexB];
-      const noteA = sheetA.getRange(i + 1, confirmIndexA + 1).getNote();
-      const noteB = sheetB.getRange(rowB + 1, confirmIndexB + 1).getNote();
+      const confirmB = dataB[rowB][confirmColumnB];
+      const noteA = sheetA.getRange(i + 1, confirmColumnA + 1).getNote();
+      const noteB = sheetB.getRange(rowB + 1, confirmColumnB + 1).getNote();
       
       if (confirmA && confirmB) {
         const dateA = new Date(confirmA);
@@ -37,22 +37,22 @@ function compareAndUpdateSheets() {
         
         if (dateA.toDateString() === dateB.toDateString()) {
           if (noteB) {
-            sheetA.getRange(i + 1, confirmIndexA + 1).setNote(noteB);
+            sheetA.getRange(i + 1, confirmColumnA + 1).setNote(noteB);
           }
         } else {
           let newNote = `【${currentMonth}】 ${Utilities.formatDate(dateB, 'Asia/Tokyo', 'yyyy/MM/dd')}\n`;
           if (noteA) {
             newNote += noteA;
           }
-          sheetA.getRange(i + 1, confirmIndexA + 1).setNote(newNote);
+          sheetA.getRange(i + 1, confirmColumnA + 1).setNote(newNote);
         }
       } else if (!confirmB) {
         let newNote = `【${lastMonth}】 値なし\n`;
         if (noteA) {
           newNote += noteA;
         }
-        sheetA.getRange(i + 1, confirmIndexA + 1).setNote(newNote);
-        sheetA.getRange(i + 1, checkIndexA + 1).setValue('要確認');
+        sheetA.getRange(i + 1, confirmColumnA + 1).setNote(newNote);
+        sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
       }
     }
   }
