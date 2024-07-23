@@ -54,11 +54,14 @@ function compareAndUpdateSheets() {
         const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
         let newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
         rangeA.setNote(newNote);
-      } else if (noteB) {
-        // AシートとBシートの '確認' 列の値が同じで、Bシートにメモがある場合
-        rangeA.setNote(noteB);
+      } else if (confirmA === confirmB) {
+        // AシートとBシートの '確認' 列の値が同じ場合
+        if (noteB) {
+          // Bシートにメモがある場合のみ、Aシートのメモを更新
+          rangeA.setNote(noteB);
+        }
+        // Bシートにメモがない場合は何もしない
       }
-      // AシートとBシートの '確認' 列の値が同じで、Bシートにメモがない場合は何もしない
     }
   }
 }
