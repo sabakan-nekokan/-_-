@@ -17,20 +17,26 @@ function transferAndUpdateData() {
   var updatedRows = 0;
   var addedRows = 0;
   
+  var newRows = [];
+
   for (var i = 1; i < dataA.length; i++) {
     var rowA = dataA[i];
     var idA = rowA[idIndexA];
     var remarkA = rowA[remarkIndexA];
     
-    // 備考欄に値がある場合のみ処理
-    if (remarkA) {
+    // 備考欄に値がある場合のみ処理（空白文字は値なしとみなす）
+    if (remarkA && remarkA.trim() !== "") {
       var foundIndex = -1;
       for (var j = 1; j < dataB.length; j++) {
-        if (dataB[j][idIndexB] === idA && dataB[j][remarkIndexB]) {
+        var remarkB = dataB[j][remarkIndexB];
+        if (dataB[j][idIndexB] === idA && remarkB && remarkB.trim() !== "") {
           foundIndex = j;
           break;
         }
       }
+      
+      var timestamp = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM");
+      var newRemark = timestamp + " " + remarkA;
       
       if (foundIndex !== -1) {
         // 既存の行を更新
@@ -40,20 +46,28 @@ function transferAndUpdateData() {
           }
         }
         var existingRemark = dataB[foundIndex][remarkIndexB];
-        var newRemark = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM") + "\n" + remarkA;
-        sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(existingRemark + "\n" + newRemark);
+        sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(newRemark + "\n" + existingRemark);
         updatedRows++;
       } else {
-        // 新しい行を追加
+        // 新しい行を追加用のデータを準備
         var newRow = new Array(headerB.length);
         for (var k = 0; k < headerA.length; k++) {
-          newRow[k] = rowA[k];
+          if (k === remarkIndexB) {
+            newRow[k] = newRemark;
+          } else {
+            newRow[k] = rowA[k];
+          }
         }
-        newRow[remarkIndexB] = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM") + "\n" + remarkA;
-        sheetB.appendRow(newRow);
+        newRows.push(newRow);
         addedRows++;
       }
     }
+  }
+  
+  // 新しい行をBシートの最後に追加
+  if (newRows.length > 0) {
+    var lastRow = sheetB.getLastRow();
+    sheetB.getRange(lastRow + 1, 1, newRows.length, headerB.length).setValues(newRows);
   }
   
   Logger.log("更新された行数: " + updatedRows);
