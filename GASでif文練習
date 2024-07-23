@@ -1,55 +1,37 @@
-function updateSheetB() {
+function compareAndCopyRemarks() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetA = ss.getSheetByName("Aシート");
-  var sheetB = ss.getSheetByName("Bシート");
+  var sheetA = ss.getSheetByName("A"); // Aシート
+  var sheetB = ss.getSheetByName("B"); // Bシート
   
   var dataA = sheetA.getDataRange().getValues();
   var dataB = sheetB.getDataRange().getValues();
   
-  var headerA = dataA[0];
-  var headerB = dataB[0];
+  var idColumnA = findColumnByName(dataA[0], "ID");
+  var remarkColumnA = findColumnByName(dataA[0], "備考");
+  var idColumnB = findColumnByName(dataB[0], "ID");
+  var remarkColumnB = findColumnByName(dataB[0], "備考");
   
-  var idIndexA = headerA.indexOf("ID");
-  var remarkIndexA = headerA.indexOf("備考");
-  var idIndexB = headerB.indexOf("ID");
-  var remarkIndexB = headerB.indexOf("備考");
-  
-  var timestamp = Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM");
-  
-  var updatedRows = 0;
-  var addedRows = 0;
+  if (idColumnA == -1 || remarkColumnA == -1 || idColumnB == -1 || remarkColumnB == -1) {
+    Logger.log("必要な列が見つかりません。");
+    return;
+  }
   
   for (var i = 1; i < dataA.length; i++) {
-    var idA = dataA[i][idIndexA];
-    var remarkA = dataA[i][remarkIndexA];
-    
-    if (remarkA && remarkA.trim() !== '') {
-      var found = false;
-      for (var j = 1; j < dataB.length; j++) {
-        var idB = dataB[j][idIndexB];
-        var remarkB = dataB[j][remarkIndexB];
-        
-        if (idA === idB && remarkB && remarkB.trim() !== '') {
-          // IDが一致し、両方の備考が空でない場合、更新
-          sheetB.getRange(j+1, 1, 1, headerB.length).setValues([dataA[i]]);
-          var newRemark = timestamp + " " + remarkA + "\n" + remarkB;
-          sheetB.getRange(j+1, remarkIndexB+1).setValue(newRemark);
-          updatedRows++;
-          found = true;
-          break;
-        }
-      }
-      
-      if (!found) {
-        // 一致するIDが見つからない場合、新しい行を追加
-        var newRow = dataA[i].slice();
-        newRow[remarkIndexB] = timestamp + " " + remarkA;
-        sheetB.appendRow(newRow);
-        addedRows++;
+    var idA = dataA[i][idColumnA];
+    for (var j = 1; j < dataB.length; j++) {
+      if (dataB[j][idColumnB] === idA) {
+        sheetA.getRange(i + 1, remarkColumnA + 1).setValue(dataB[j][remarkColumnB]);
+        break;
       }
     }
   }
-  
-  Logger.log("更新された行数: " + updatedRows);
-  Logger.log("追加された行数: " + addedRows);
+}
+
+function findColumnByName(headerRow, columnName) {
+  for (var i = 0; i < headerRow.length; i++) {
+    if (headerRow[i] === columnName) {
+      return i;
+    }
+  }
+  return -1;
 }
