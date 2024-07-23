@@ -1,14 +1,21 @@
+/**
+ * AシートとBシートを比較し、条件に基づいてAシートを更新する関数
+ */
 function compareAndUpdateSheets() {
+  // スプレッドシートとシートの取得
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheetA = ss.getSheetByName('A');
   const sheetB = ss.getSheetByName('B');
   
+  // シートデータの取得
   const dataA = sheetA.getDataRange().getValues();
   const dataB = sheetB.getDataRange().getValues();
   
+  // ヘッダー行の取得
   const headerA = dataA[0];
   const headerB = dataB[0];
   
+  // 各列のインデックスを取得
   const idColumnA = headerA.indexOf('ID');
   const confirmColumnA = headerA.indexOf('確認');
   const checkColumnA = headerA.indexOf('チェック');
@@ -16,17 +23,21 @@ function compareAndUpdateSheets() {
   const idColumnB = headerB.indexOf('ID');
   const confirmColumnB = headerB.indexOf('確認');
   
+  // タイムスタンプの生成（1ヶ月前の日付）
   const currentDate = new Date();
   const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
   const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', '【yyyy/MM】');
   
+  // Aシートの各行に対して処理を実行
   for (let i = 1; i < dataA.length; i++) {
     const idA = dataA[i][idColumnA];
     const confirmA = dataA[i][confirmColumnA];
     
+    // BシートからマッチするIDを持つ行を検索
     const rowB = dataB.findIndex(row => row[idColumnB] === idA);
     
     if (rowB !== -1) {
+      // マッチする行が見つかった場合の処理
       const confirmB = dataB[rowB][confirmColumnB];
       const rangeBConfirm = sheetB.getRange(rowB + 1, confirmColumnB + 1);
       const noteB = rangeBConfirm.getNote();
@@ -34,16 +45,20 @@ function compareAndUpdateSheets() {
       const checkRangeA = sheetA.getRange(i + 1, checkColumnA + 1);
       
       if (confirmB === '') {
+        // Bシートの '確認' 列が空白の場合
         let newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
         rangeA.setNote(newNote);
         checkRangeA.setValue('要確認');
       } else if (confirmA !== confirmB) {
+        // AシートとBシートの '確認' 列の値が異なる場合
         const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
         let newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
         rangeA.setNote(newNote);
       } else if (noteB) {
+        // AシートとBシートの '確認' 列の値が同じで、Bシートにメモがある場合
         rangeA.setNote(noteB);
       }
+      // AシートとBシートの '確認' 列の値が同じで、Bシートにメモがない場合は何もしない
     }
   }
 }
