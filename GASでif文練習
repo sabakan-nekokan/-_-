@@ -1,54 +1,61 @@
-function colorCodeSheet() {
-  const sheet = SpreadsheetApp.getActiveSheet();
+function colorSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const dataRange = sheet.getDataRange();
   const values = dataRange.getValues();
   const numRows = values.length;
+  const numCols = values[0].length;
 
-  // ヘッダー行から列のインデックスを取得
+  // ヘッダーから必要な列のインデックスを取得
   const headers = values[0];
-  const colIndices = {
-    tGray: headers.indexOf('T灰色'),
-    sOrange: headers.indexOf('Sオレンジ'),
-    hConfirm: headers.indexOf('H確認'),
-    colorG: headers.indexOf('色塗りG'),
-    colorI: headers.indexOf('色塗りI')
-  };
+  const endIndex = headers.indexOf('終了');
+  const scheduledIndex = headers.indexOf('確認予定');
+  const limitIndex = headers.indexOf('リミット');
+  const checkIndex = headers.indexOf('チェック');
+  const lastMonthIndex = headers.indexOf('前月確認');
 
-  // すべての列が見つからない場合はエラーを投げる
-  for (const [key, value] of Object.entries(colIndices)) {
-    if (value === -1) {
-      throw new Error(`列 "${key}" が見つかりません。`);
-    }
-  }
+  // 背景色の設定
+  const greyColor = '#D3D3D3';
+  const orangeColor = '#FFA500';
+  const yellowColor = '#FFFF00';
 
-  // 色の定義
-  const colors = {
-    gray: '#D3D3D3',
-    orange: '#FFA500',
-    yellow: '#FFFF00'
-  };
+  // 塗るセルの範囲を保持する配列
+  let greyCells = [];
+  let orangeCells = [];
+  let yellowCells = [];
 
-  // 色付けの範囲を保存する配列
-  let grayRanges = [];
-  let orangeRanges = [];
-  let yellowRanges = [];
-
-  // データを走査して色付けの範囲を決定
+  // データを走査して条件をチェック
   for (let i = 1; i < numRows; i++) {
     const row = values[i];
-    if (row[colIndices.tGray]) {
-      grayRanges.push(sheet.getRange(i + 1, 1, 1, headers.length));
-    } else if (row[colIndices.hConfirm] && !row[colIndices.sOrange]) {
-      orangeRanges.push(sheet.getRange(i + 1, colIndices.hConfirm + 1, 1, 1));
-      orangeRanges.push(sheet.getRange(i + 1, colIndices.colorG + 1, 1, colIndices.colorI - colIndices.colorG + 1));
-    } else if (row[colIndices.hConfirm] < row[colIndices.sOrange]) {
-      yellowRanges.push(sheet.getRange(i + 1, colIndices.hConfirm + 1, 1, 1));
-      yellowRanges.push(sheet.getRange(i + 1, colIndices.colorG + 1, 1, colIndices.colorI - colIndices.colorG + 1));
+    
+    if (row[endIndex]) {
+      // [終了]に値がある場合、行全体を灰色にする
+      greyCells.push(sheet.getRange(i + 1, 1, 1, numCols));
+    } else {
+      const limit = row[limitIndex];
+      const scheduled = row[scheduledIndex];
+      
+      if (limit && !scheduled) {
+        // [リミット]に値があり[確認予定]がない場合
+        orangeCells.push(sheet.getRange(i + 1, limitIndex + 1, 1, 1));
+        orangeCells.push(sheet.getRange(i + 1, checkIndex + 1, 1, 1));
+        orangeCells.push(sheet.getRange(i + 1, lastMonthIndex + 1, 1, 1));
+      } else if (limit && scheduled && new Date(limit) < new Date(scheduled)) {
+        // [リミット]<[確認予定]の場合
+        yellowCells.push(sheet.getRange(i + 1, limitIndex + 1, 1, 1));
+        yellowCells.push(sheet.getRange(i + 1, checkIndex + 1, 1, 1));
+        yellowCells.push(sheet.getRange(i + 1, lastMonthIndex + 1, 1, 1));
+      }
     }
   }
 
-  // 一括で色付けを適用
-  if (grayRanges.length > 0) sheet.getRangeList(grayRanges).setBackground(colors.gray);
-  if (orangeRanges.length > 0) sheet.getRangeList(orangeRanges).setBackground(colors.orange);
-  if (yellowRanges.length > 0) sheet.getRangeList(yellowRanges).setBackground(colors.yellow);
+  // 一括で背景色を設定
+  if (greyCells.length > 0) {
+    sheet.getRangeList(greyCells).setBackground(greyColor);
+  }
+  if (orangeCells.length > 0) {
+    sheet.getRangeList(orangeCells).setBackground(orangeColor);
+  }
+  if (yellowCells.length > 0) {
+    sheet.getRangeList(yellowCells).setBackground(yellowColor);
+  }
 }
