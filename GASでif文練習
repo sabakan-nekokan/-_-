@@ -16,15 +16,25 @@ function compareAndCopyRemarks() {
     return;
   }
   
+  var updatedCount = 0; // 更新された行数をカウントする変数
+
   for (var i = 1; i < dataA.length; i++) {
     var idA = dataA[i][idColumnA];
     for (var j = 1; j < dataB.length; j++) {
       if (dataB[j][idColumnB] === idA) {
-        sheetA.getRange(i + 1, remarkColumnA + 1).setValue(dataB[j][remarkColumnB]);
+        var currentValue = dataA[i][remarkColumnA];
+        var newValue = dataB[j][remarkColumnB];
+        if (currentValue !== newValue) {
+          sheetA.getRange(i + 1, remarkColumnA + 1).setValue(newValue);
+          updatedCount++; // 更新があった場合にカウントを増やす
+        }
         break;
       }
     }
   }
+  
+  // 更新された行数をログに出力
+  Logger.log(updatedCount + "行が更新されました。");
 }
 
 function findColumnByName(headerRow, columnName) {
