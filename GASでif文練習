@@ -1,72 +1,88 @@
-function processSpreadsheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
-  const dataRange = sheet.getDataRange();
-  const values = dataRange.getValues();
-  const headers = values[0];
+function updateSheet() {
+  var startTime = new Date();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetA = ss.getSheetByName('Aシート(今月)');
+  var sheetB = ss.getSheetByName('Bシート(先月)');
 
-  // ヘッダーのインデックスを取得
-  const endIndex = headers.indexOf('終了');
-  const confirmDateIndex = headers.indexOf('確認予定');
-  const limitIndex = headers.indexOf('リミット');
-  const checkIndex = headers.indexOf('チェック');
-  const prevMonthIndex = headers.indexOf('前月確認');
+  var dataA = sheetA.getDataRange().getValues();
+  var dataB = sheetB.getDataRange().getValues();
+  var notesB = sheetB.getDataRange().getNotes();
 
-  // 色の定義
-  const GRAY = '#D3D3D3';
-  const ORANGE = '#FFA500';
-  const YELLOW = '#FFFF00';
+  var headerA = dataA[0];
+  var idIndexA = headerA.indexOf('ID');
+  var dateIndexA = headerA.indexOf('確認');
 
-  // 処理用の配列を初期化
-  const colorRanges = {
-    gray: [],
-    orange: [],
-    yellow: []
-  };
-  const valueRanges = {
-    completed: [],
-    confirmation: [],
-    delayed: []
-  };
+  var headerB = dataB[0];
+  var idIndexB = headerB.indexOf('ID');
+  var dateIndexB = headerB.indexOf('確認');
 
-  // データを処理
-  for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    const endValue = row[endIndex];
-    const confirmDate = row[confirmDateIndex];
-    const limit = row[limitIndex];
+  var updatedCells = [];
+  var processedRows = 0;
 
-    if (endValue) {
-      colorRanges.gray.push(`${i + 1}:${i + 1}`);
-      valueRanges.completed.push(`D${i + 1}`);
-    } else if (limit && !confirmDate) {
-      colorRanges.orange.push(`${String.fromCharCode(65 + limitIndex)}${i + 1}:${String.fromCharCode(65 + prevMonthIndex)}${i + 1}`);
-      valueRanges.confirmation.push(`D${i + 1}`);
-    } else if (limit && confirmDate && new Date(limit) < new Date(confirmDate)) {
-      colorRanges.yellow.push(`${String.fromCharCode(65 + limitIndex)}${i + 1}:${String.fromCharCode(65 + prevMonthIndex)}${i + 1}`);
-      valueRanges.delayed.push(`D${i + 1}`);
+  for (var i = 1; i < dataA.length; i++) {
+    var idA = dataA[i][idIndexA];
+    var dateA = normalizeDate(dataA[i][dateIndexA]);
+
+    for (var j = 1; j < dataB.length; j++) {
+      var idB = dataB[j][idIndexB];
+      var dateB = normalizeDate(dataB[j][dateIndexB]);
+
+      if (idA === idB) {
+        var noteB = notesB[j][dateIndexB];
+        
+        if (dateA && dateB && dateA === dateB) {
+          // 日付が一致する場合、Bシートのメモをそのままコピー
+          updatedCells.push({row: i + 1, col: dateIndexA + 1, note: noteB});
+        } else if (dateB) {
+          // 日付が異なる場合、新しいエントリーを追加
+          var dateBObj = new Date(dateB);
+          var oneMonthAgo = new Date(dateBObj.getFullYear(), dateBObj.getMonth() - 1, 1);
+          var oneMonthAgoStr = Utilities.formatDate(oneMonthAgo, 'Asia/Tokyo', 'yyyy/MM');
+          var newEntry = `【${oneMonthAgoStr}】 ${dateB}`;
+          
+          var currentNoteA = sheetA.getRange(i + 1, dateIndexA + 1).getNote();
+          var updatedNote = currentNoteA ? (newEntry + '\n' + currentNoteA) : newEntry;
+          updatedCells.push({row: i + 1, col: dateIndexA + 1, note: updatedNote});
+        }
+        break;
+      }
+    }
+
+    processedRows++;
+    if (processedRows % 1000 === 0) {
+      Logger.log(`Processed ${processedRows} rows...`);
     }
   }
 
-  // 色を一括で適用
-  applyColors(sheet, colorRanges.gray, GRAY);
-  applyColors(sheet, colorRanges.orange, ORANGE);
-  applyColors(sheet, colorRanges.yellow, YELLOW);
+  // バッチ更新
+  updatedCells.forEach(function(cell) {
+    sheetA.getRange(cell.row, cell.col).setNote(cell.note);
+  });
 
-  // 値を一括で設定
-  setValues(sheet, valueRanges.completed, '工事完了');
-  setValues(sheet, valueRanges.confirmation, '確認用');
-  setValues(sheet, valueRanges.delayed, '遅延あり');
+  var endTime = new Date();
+  var executionTime = (endTime - startTime) / 1000; // 秒単位
+  Logger.log(`Total rows processed: ${processedRows}`);
+  Logger.log(`Execution time: ${executionTime} seconds`);
 }
 
-function applyColors(sheet, ranges, color) {
-  ranges.forEach(range => {
-    sheet.getRange(range).setBackground(color);
-  });
-}
+function normalizeDate(dateValue) {
+  if (dateValue === undefined || dateValue === null || dateValue === '') return null;
 
-function setValues(sheet, ranges, value) {
-  ranges.forEach(range => {
-    sheet.getRange(range).setValue(value);
-  });
+  var dateString = '';
+  if (dateValue instanceof Date) {
+    dateString = Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy/MM/dd');
+  } else if (typeof dateValue === 'string') {
+    dateString = dateValue.trim();
+  } else {
+    return null;
+  }
+
+  if (dateString === '') return null;
+
+  var parts = dateString.split('/');
+  if (parts.length !== 3) return null;
+
+  if (isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+
+  return parts[0] + '/' + parts[1].padStart(2, '0') + '/' + parts[2].padStart(2, '0');
 }
