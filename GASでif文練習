@@ -1,45 +1,72 @@
-function applyConditionalFormatting() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+function processSpreadsheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getActiveSheet();
   const dataRange = sheet.getDataRange();
   const values = dataRange.getValues();
-  const backgrounds = dataRange.getBackgrounds();
-
-  // ヘッダー行からカラムのインデックスを取得
   const headers = values[0];
-  const endColumnIndex = headers.indexOf('終了');
-  const confirmDateColumnIndex = headers.indexOf('確認予定');
-  const limitColumnIndex = headers.indexOf('リミット');
-  const checkColumnIndex = headers.indexOf('チェック');
-  const prevMonthColumnIndex = headers.indexOf('前月確認');
 
-  // 条件に基づいて背景色を設定
+  // ヘッダーのインデックスを取得
+  const endIndex = headers.indexOf('終了');
+  const confirmDateIndex = headers.indexOf('確認予定');
+  const limitIndex = headers.indexOf('リミット');
+  const checkIndex = headers.indexOf('チェック');
+  const prevMonthIndex = headers.indexOf('前月確認');
+
+  // 色の定義
+  const GRAY = '#D3D3D3';
+  const ORANGE = '#FFA500';
+  const YELLOW = '#FFFF00';
+
+  // 処理用の配列を初期化
+  const colorRanges = {
+    gray: [],
+    orange: [],
+    yellow: []
+  };
+  const valueRanges = {
+    completed: [],
+    confirmation: [],
+    delayed: []
+  };
+
+  // データを処理
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
-    
-    if (row[endColumnIndex] !== '') {
-      // [終了]に値がある場合、行全体を灰色に
-      for (let j = 0; j < row.length; j++) {
-        backgrounds[i][j] = '#D3D3D3'; // 灰色
-      }
-    } else if (row[limitColumnIndex] !== '' && row[confirmDateColumnIndex] === '') {
-      // [リミット]に値があり[確認予定]がない場合、指定の列をオレンジに
-      backgrounds[i][limitColumnIndex] = '#FFA500'; // オレンジ
-      backgrounds[i][checkColumnIndex] = '#FFA500';
-      backgrounds[i][prevMonthColumnIndex] = '#FFA500';
-    } else if (row[limitColumnIndex] !== '' && row[confirmDateColumnIndex] !== '') {
-      // [リミット]と[確認予定]の日付を比較
-      const limitDate = new Date(row[limitColumnIndex]);
-      const confirmDate = new Date(row[confirmDateColumnIndex]);
-      
-      if (limitDate < confirmDate) {
-        // [リミット] < [確認予定]の場合、指定の列を黄色に
-        backgrounds[i][limitColumnIndex] = '#FFFF00'; // 黄色
-        backgrounds[i][checkColumnIndex] = '#FFFF00';
-        backgrounds[i][prevMonthColumnIndex] = '#FFFF00';
-      }
+    const endValue = row[endIndex];
+    const confirmDate = row[confirmDateIndex];
+    const limit = row[limitIndex];
+
+    if (endValue) {
+      colorRanges.gray.push(`${i + 1}:${i + 1}`);
+      valueRanges.completed.push(`D${i + 1}`);
+    } else if (limit && !confirmDate) {
+      colorRanges.orange.push(`${String.fromCharCode(65 + limitIndex)}${i + 1}:${String.fromCharCode(65 + prevMonthIndex)}${i + 1}`);
+      valueRanges.confirmation.push(`D${i + 1}`);
+    } else if (limit && confirmDate && new Date(limit) < new Date(confirmDate)) {
+      colorRanges.yellow.push(`${String.fromCharCode(65 + limitIndex)}${i + 1}:${String.fromCharCode(65 + prevMonthIndex)}${i + 1}`);
+      valueRanges.delayed.push(`D${i + 1}`);
     }
   }
 
-  // 一括で背景色を適用
-  dataRange.setBackgrounds(backgrounds);
+  // 色を一括で適用
+  applyColors(sheet, colorRanges.gray, GRAY);
+  applyColors(sheet, colorRanges.orange, ORANGE);
+  applyColors(sheet, colorRanges.yellow, YELLOW);
+
+  // 値を一括で設定
+  setValues(sheet, valueRanges.completed, '工事完了');
+  setValues(sheet, valueRanges.confirmation, '確認用');
+  setValues(sheet, valueRanges.delayed, '遅延あり');
+}
+
+function applyColors(sheet, ranges, color) {
+  ranges.forEach(range => {
+    sheet.getRange(range).setBackground(color);
+  });
+}
+
+function setValues(sheet, ranges, value) {
+  ranges.forEach(range => {
+    sheet.getRange(range).setValue(value);
+  });
 }
