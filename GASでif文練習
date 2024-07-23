@@ -17,8 +17,8 @@ function compareAndUpdateSheets() {
   const confirmColumnB = headerB.indexOf('確認');
   
   const currentDate = new Date();
-  const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, currentDate.getDate());
-  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', '【yyyy/MM/dd】');
+  const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', '【yyyy/MM】');
   
   for (let i = 1; i < dataA.length; i++) {
     const idA = dataA[i][idColumnA];
@@ -31,16 +31,18 @@ function compareAndUpdateSheets() {
       const noteB = sheetB.getRange(rowB + 1, confirmColumnB + 1).getNote();
       const rangeA = sheetA.getRange(i + 1, confirmColumnA + 1);
       
+      let newNote = '';
       if (confirmB === '') {
-        let newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
-        rangeA.setNote(newNote);
+        newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
         sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
       } else if (confirmA === confirmB) {
-        rangeA.setNote(noteB);
+        newNote = noteB;
       } else {
-        let newNote = `${lastMonthTimestamp} ${confirmB}\n${noteB}`;
-        rangeA.setNote(newNote);
+        const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
+        newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
       }
+      
+      rangeA.setNote(newNote);
     }
   }
 }
