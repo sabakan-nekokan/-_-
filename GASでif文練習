@@ -18,13 +18,14 @@ function transferAndUpdateData() {
   var addedRows = 0;
   
   var newRows = [];
+  var updateOperations = [];
 
+  // Step 1: データの分類と新規データの準備
   for (var i = 1; i < dataA.length; i++) {
     var rowA = dataA[i];
     var idA = rowA[idIndexA];
     var remarkA = rowA[remarkIndexA];
     
-    // 備考欄に値がある場合のみ処理（空白文字は値なしとみなす）
     if (remarkA && remarkA.trim() !== "") {
       var foundIndex = -1;
       for (var j = 1; j < dataB.length; j++) {
@@ -38,18 +39,8 @@ function transferAndUpdateData() {
       var timestamp = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM");
       var newRemark = timestamp + " " + remarkA;
       
-      if (foundIndex !== -1) {
-        // 既存の行を更新
-        for (var k = 0; k < headerA.length; k++) {
-          if (k !== remarkIndexB) {
-            sheetB.getRange(foundIndex + 1, k + 1).setValue(rowA[k]);
-          }
-        }
-        var existingRemark = dataB[foundIndex][remarkIndexB];
-        sheetB.getRange(foundIndex + 1, remarkIndexB + 1).setValue(newRemark + "\n" + existingRemark);
-        updatedRows++;
-      } else {
-        // 新しい行を追加用のデータを準備
+      if (foundIndex === -1) {
+        // 新規データの準備
         var newRow = new Array(headerB.length);
         for (var k = 0; k < headerA.length; k++) {
           if (k === remarkIndexB) {
@@ -60,16 +51,35 @@ function transferAndUpdateData() {
         }
         newRows.push(newRow);
         addedRows++;
+      } else {
+        // 更新操作の準備
+        updateOperations.push({
+          row: foundIndex + 1,
+          newData: rowA,
+          newRemark: newRemark,
+          existingRemark: dataB[foundIndex][remarkIndexB]
+        });
       }
     }
   }
-  
-  // 新しい行をBシートの最後に追加
+
+  // Step 2: 新規データの追加
   if (newRows.length > 0) {
     var lastRow = sheetB.getLastRow();
     sheetB.getRange(lastRow + 1, 1, newRows.length, headerB.length).setValues(newRows);
   }
+
+  // Step 3: 既存データの更新
+  updateOperations.forEach(function(operation) {
+    for (var k = 0; k < headerA.length; k++) {
+      if (k !== remarkIndexB) {
+        sheetB.getRange(operation.row, k + 1).setValue(operation.newData[k]);
+      }
+    }
+    sheetB.getRange(operation.row, remarkIndexB + 1).setValue(operation.newRemark + "\n" + operation.existingRemark);
+    updatedRows++;
+  });
   
-  Logger.log("更新された行数: " + updatedRows);
   Logger.log("追加された行数: " + addedRows);
+  Logger.log("更新された行数: " + updatedRows);
 }
