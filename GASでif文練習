@@ -31,18 +31,19 @@ function compareAndUpdateSheets() {
       const noteB = sheetB.getRange(rowB + 1, confirmColumnB + 1).getNote();
       const rangeA = sheetA.getRange(i + 1, confirmColumnA + 1);
       
-      let newNote = '';
       if (confirmB === '') {
-        newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
+        let newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
+        rangeA.setNote(newNote);
         sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
       } else if (confirmA === confirmB) {
-        newNote = noteB;
+        if (noteB) {
+          rangeA.setNote(noteB);
+        }
       } else {
         const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
-        newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
+        let newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${rangeA.getNote()}`;
+        rangeA.setNote(newNote);
       }
-      
-      rangeA.setNote(newNote);
     }
   }
 }
