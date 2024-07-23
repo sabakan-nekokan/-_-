@@ -1,47 +1,70 @@
-function compareAndCopyRemarks() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetA = ss.getSheetByName("A"); // Aシート
-  var sheetB = ss.getSheetByName("B"); // Bシート
-  
-  var dataA = sheetA.getDataRange().getValues();
-  var dataB = sheetB.getDataRange().getValues();
-  
-  var idColumnA = findColumnByName(dataA[0], "ID");
-  var remarkColumnA = findColumnByName(dataA[0], "備考");
-  var idColumnB = findColumnByName(dataB[0], "ID");
-  var remarkColumnB = findColumnByName(dataB[0], "備考");
-  
-  if (idColumnA == -1 || remarkColumnA == -1 || idColumnB == -1 || remarkColumnB == -1) {
-    Logger.log("必要な列が見つかりません。");
-    return;
-  }
-  
-  var updatedCount = 0; // 更新された行数をカウントする変数
+function formatSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getActiveSheet();
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  const numRows = values.length;
+  const numCols = values[0].length;
 
-  for (var i = 1; i < dataA.length; i++) {
-    var idA = dataA[i][idColumnA];
-    for (var j = 1; j < dataB.length; j++) {
-      if (dataB[j][idColumnB] === idA) {
-        var currentValue = dataA[i][remarkColumnA];
-        var newValue = dataB[j][remarkColumnB];
-        if (currentValue !== newValue) {
-          sheetA.getRange(i + 1, remarkColumnA + 1).setValue(newValue);
-          updatedCount++; // 更新があった場合にカウントを増やす
-        }
-        break;
-      }
+  // ヘッダー行から必要な列のインデックスを取得
+  const headers = values[0];
+  const colIndices = {
+    end: headers.indexOf('終了'),
+    confirmSchedule: headers.indexOf('確認予定'),
+    limit: headers.indexOf('リミット'),
+    check: headers.indexOf('チェック'),
+    prevMonthConfirm: headers.indexOf('前月確認')
+  };
+
+  // 色の定義
+  const colors = {
+    grey: '#D3D3D3',
+    orange: '#FFA500',
+    yellow: '#FFFF00'
+  };
+
+  // 変更を適用するための配列
+  const colorChanges = [];
+  const valueChanges = [];
+
+  // データの処理
+  for (let i = 1; i < numRows; i++) {
+    const row = values[i];
+    const endValue = row[colIndices.end];
+    const confirmScheduleValue = row[colIndices.confirmSchedule];
+    const limitValue = row[colIndices.limit];
+
+    if (endValue) {
+      // 終了列に値がある場合
+      colorChanges.push({range: sheet.getRange(i + 1, 1, 1, numCols), color: colors.grey});
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '工事完了'});
+    } else if (limitValue && !confirmScheduleValue) {
+      // リミットに値があり確認予定がない場合
+      const rangesToColor = [
+        sheet.getRange(i + 1, colIndices.limit + 1),
+        sheet.getRange(i + 1, colIndices.check + 1),
+        sheet.getRange(i + 1, colIndices.prevMonthConfirm + 1)
+      ];
+      rangesToColor.forEach(range => colorChanges.push({range: range, color: colors.orange}));
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '確認用'});
+    } else if (limitValue && confirmScheduleValue && new Date(limitValue) < new Date(confirmScheduleValue)) {
+      // リミット < 確認予定の場合
+      const rangesToColor = [
+        sheet.getRange(i + 1, colIndices.limit + 1),
+        sheet.getRange(i + 1, colIndices.check + 1),
+        sheet.getRange(i + 1, colIndices.prevMonthConfirm + 1)
+      ];
+      rangesToColor.forEach(range => colorChanges.push({range: range, color: colors.yellow}));
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '遅延あり'});
     }
   }
-  
-  // 更新された行数をログに出力
-  Logger.log(updatedCount + "行が更新されました。");
-}
 
-function findColumnByName(headerRow, columnName) {
-  for (var i = 0; i < headerRow.length; i++) {
-    if (headerRow[i] === columnName) {
-      return i;
-    }
-  }
-  return -1;
+  // 一括で色の変更を適用
+  colorChanges.forEach(change => change.range.setBackground(change.color));
+
+  // 一括で値の変更を適用
+  valueChanges.forEach(change => change.range.setValue(change.value));
+
+  // 既存の色を削除
+  sheet.getRange(1, 1, numRows, numCols).setBackground(null);
 }
