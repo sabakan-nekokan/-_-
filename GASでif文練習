@@ -17,7 +17,6 @@ function compareAndUpdateSheets() {
   const confirmColumnB = headerB.indexOf('確認');
   
   const currentDate = new Date();
-  const currentMonth = Utilities.formatDate(currentDate, 'Asia/Tokyo', 'yyyy/MM');
   const lastMonth = Utilities.formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1), 'Asia/Tokyo', 'yyyy/MM');
   
   for (let i = 1; i < dataA.length; i++) {
@@ -28,31 +27,23 @@ function compareAndUpdateSheets() {
     
     if (rowB !== -1) {
       const confirmB = dataB[rowB][confirmColumnB];
-      const noteA = sheetA.getRange(i + 1, confirmColumnA + 1).getNote();
-      const noteB = sheetB.getRange(rowB + 1, confirmColumnB + 1).getNote();
+      const rangeA = sheetA.getRange(i + 1, confirmColumnA + 1);
+      const rangeB = sheetB.getRange(rowB + 1, confirmColumnB + 1);
+      const noteA = rangeA.getNote();
+      const noteB = rangeB.getNote();
       
-      if (confirmA && confirmB) {
-        const dateA = new Date(confirmA);
-        const dateB = new Date(confirmB);
-        
-        if (dateA.toDateString() === dateB.toDateString()) {
-          if (noteB) {
-            sheetA.getRange(i + 1, confirmColumnA + 1).setNote(noteB);
-          }
-        } else {
-          let newNote = `【${currentMonth}】 ${Utilities.formatDate(dateB, 'Asia/Tokyo', 'yyyy/MM/dd')}\n`;
-          if (noteA) {
-            newNote += noteA;
-          }
-          sheetA.getRange(i + 1, confirmColumnA + 1).setNote(newNote);
-        }
-      } else if (!confirmB) {
-        let newNote = `【${lastMonth}】 値なし\n`;
-        if (noteA) {
-          newNote += noteA;
-        }
-        sheetA.getRange(i + 1, confirmColumnA + 1).setNote(newNote);
+      if (!confirmB) {
+        // Bシートの[確認]列のセルが空白の場合
+        let newNote = `【${lastMonth}】 値なし\n${noteA}`;
+        rangeA.setNote(newNote);
         sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
+      } else if (confirmA === confirmB) {
+        // AシートとBシートの[確認]列のセルの値が同じ場合
+        rangeA.setNote(noteB);
+      } else {
+        // AシートとBシートの[確認]列のセルの値が違う場合
+        let newNote = `【${lastMonth}】 ${confirmB}\n${noteA}`;
+        rangeA.setNote(newNote);
       }
     }
   }
