@@ -1,72 +1,59 @@
 function compareAndUpdateSheets() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetA = ss.getSheetByName("A");
-  var sheetB = ss.getSheetByName("B");
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetA = ss.getSheetByName('A');
+  const sheetB = ss.getSheetByName('B');
   
-  var dataA = sheetA.getDataRange().getValues();
-  var dataB = sheetB.getDataRange().getValues();
+  const dataA = sheetA.getDataRange().getValues();
+  const dataB = sheetB.getDataRange().getValues();
   
-  var headerA = dataA[0];
-  var headerB = dataB[0];
+  const headerA = dataA[0];
+  const headerB = dataB[0];
   
-  var idColumnA = headerA.indexOf("ID");
-  var confirmColumnA = headerA.indexOf("確認");
-  var checkColumnA = headerA.indexOf("チェック");
+  const idIndexA = headerA.indexOf('ID');
+  const confirmIndexA = headerA.indexOf('確認');
+  const checkIndexA = headerA.indexOf('チェック');
   
-  var idColumnB = headerB.indexOf("ID");
-  var confirmColumnB = headerB.indexOf("確認");
+  const idIndexB = headerB.indexOf('ID');
+  const confirmIndexB = headerB.indexOf('確認');
   
-  if (idColumnA === -1 || confirmColumnA === -1 || checkColumnA === -1 || idColumnB === -1 || confirmColumnB === -1) {
-    throw new Error("必要な列が見つかりません。");
-  }
+  const currentDate = new Date();
+  const currentMonth = Utilities.formatDate(currentDate, 'Asia/Tokyo', 'yyyy/MM');
+  const lastMonth = Utilities.formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1), 'Asia/Tokyo', 'yyyy/MM');
   
-  var currentDate = new Date();
-  var lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-  var lastMonthTimestamp = Utilities.formatDate(lastMonth, Session.getScriptTimeZone(), "yyyy/MM");
-  
-  for (var i = 1; i < dataA.length; i++) {
-    var idA = dataA[i][idColumnA];
-    var dateA = dataA[i][confirmColumnA];
+  for (let i = 1; i < dataA.length; i++) {
+    const idA = dataA[i][idIndexA];
+    const confirmA = dataA[i][confirmIndexA];
     
-    for (var j = 1; j < dataB.length; j++) {
-      if (dataB[j][idColumnB] === idA) {
-        var dateB = dataB[j][confirmColumnB];
-        var cellA = sheetA.getRange(i + 1, confirmColumnA + 1);
-        var noteA = cellA.getNote();
+    const rowB = dataB.findIndex(row => row[idIndexB] === idA);
+    
+    if (rowB !== -1) {
+      const confirmB = dataB[rowB][confirmIndexB];
+      const noteA = sheetA.getRange(i + 1, confirmIndexA + 1).getNote();
+      const noteB = sheetB.getRange(rowB + 1, confirmIndexB + 1).getNote();
+      
+      if (confirmA && confirmB) {
+        const dateA = new Date(confirmA);
+        const dateB = new Date(confirmB);
         
-        var newNote = "";
-        if (dateA && dateB && areDatesEqual(dateA, dateB)) {
-          // 日付が一致する場合、Bシートのメモを転記
-          var noteBCell = sheetB.getRange(j + 1, confirmColumnB + 1);
-          var noteB = noteBCell.getNote();
-          newNote = noteB;
-        } else {
-          // 日付が一致しない場合、新しいメモを追加
-          if (dateB) {
-            newNote = "【" + lastMonthTimestamp + "】 " + Utilities.formatDate(dateB, Session.getScriptTimeZone(), "yyyy/MM/dd");
-          } else {
-            newNote = "【" + lastMonthTimestamp + "】 \"値なし\"";
-            sheetA.getRange(i + 1, checkColumnA + 1).setValue("要確認");
+        if (dateA.toDateString() === dateB.toDateString()) {
+          if (noteB) {
+            sheetA.getRange(i + 1, confirmIndexA + 1).setNote(noteB);
           }
+        } else {
+          let newNote = `【${currentMonth}】 ${Utilities.formatDate(dateB, 'Asia/Tokyo', 'yyyy/MM/dd')}\n`;
+          if (noteA) {
+            newNote += noteA;
+          }
+          sheetA.getRange(i + 1, confirmIndexA + 1).setNote(newNote);
         }
-        
-        // 既存のメモがある場合は、新しいメモの後に追加
+      } else if (!confirmB) {
+        let newNote = `【${lastMonth}】 値なし\n`;
         if (noteA) {
-          newNote = newNote + (newNote ? "\n" : "") + noteA;
+          newNote += noteA;
         }
-        
-        cellA.setNote(newNote);
-        break;
+        sheetA.getRange(i + 1, confirmIndexA + 1).setNote(newNote);
+        sheetA.getRange(i + 1, checkIndexA + 1).setValue('要確認');
       }
     }
   }
-}
-
-function areDatesEqual(date1, date2) {
-  if (!(date1 instanceof Date)) date1 = new Date(date1);
-  if (!(date2 instanceof Date)) date2 = new Date(date2);
-  
-  return date1.getFullYear() === date2.getFullYear() &&
-         date1.getMonth() === date2.getMonth() &&
-         date1.getDate() === date2.getDate();
 }
