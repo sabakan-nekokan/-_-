@@ -34,28 +34,28 @@ function compareAndUpdateSheets() {
         var cellA = sheetA.getRange(i + 1, confirmColumnA + 1);
         var noteA = cellA.getNote();
         
+        var newNote = "";
         if (dateA && dateB && areDatesEqual(dateA, dateB)) {
           // 日付が一致する場合、Bシートのメモを転記
           var noteBCell = sheetB.getRange(j + 1, confirmColumnB + 1);
           var noteB = noteBCell.getNote();
-          cellA.setNote(noteB);
+          newNote = noteB;
         } else {
           // 日付が一致しない場合、新しいメモを追加
-          var newNote = "";
           if (dateB) {
             newNote = "【" + lastMonthTimestamp + "】 " + Utilities.formatDate(dateB, Session.getScriptTimeZone(), "yyyy/MM/dd");
           } else {
             newNote = "【" + lastMonthTimestamp + "】 \"値なし\"";
             sheetA.getRange(i + 1, checkColumnA + 1).setValue("要確認");
           }
-          
-          if (noteA) {
-            newNote = newNote + "\n" + noteA;
-          }
-          
-          cellA.setNote(newNote);
         }
         
+        // 既存のメモがある場合は、新しいメモの後に追加
+        if (noteA) {
+          newNote = newNote + (newNote ? "\n" : "") + noteA;
+        }
+        
+        cellA.setNote(newNote);
         break;
       }
     }
