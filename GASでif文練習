@@ -1,115 +1,70 @@
-function updateSheet() {
-  var startTime = new Date();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetA = ss.getSheetByName('Aシート(今月)');
-  var sheetB = ss.getSheetByName('Bシート(先月)');
+function formatSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getActiveSheet();
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  const numRows = values.length;
+  const numCols = values[0].length;
 
-  var dataA = sheetA.getDataRange().getValues();
-  var dataB = sheetB.getDataRange().getValues();
-  var notesB = sheetB.getDataRange().getNotes();
+  // ヘッダー行から必要な列のインデックスを取得
+  const headers = values[0];
+  const colIndices = {
+    end: headers.indexOf('終了'),
+    confirmSchedule: headers.indexOf('確認予定'),
+    limit: headers.indexOf('リミット'),
+    check: headers.indexOf('チェック'),
+    prevMonthConfirm: headers.indexOf('前月確認')
+  };
 
-  var headerA = dataA[0];
-  var idIndexA = headerA.indexOf('ID');
-  var dateIndexA = headerA.indexOf('確認');
-  var checkIndexA = headerA.indexOf('チェック');
+  // 色の定義
+  const colors = {
+    grey: '#D3D3D3',
+    orange: '#FFA500',
+    yellow: '#FFFF00'
+  };
 
-  var headerB = dataB[0];
-  var idIndexB = headerB.indexOf('ID');
-  var dateIndexB = headerB.indexOf('確認');
+  // 変更を適用するための配列
+  const colorChanges = [];
+  const valueChanges = [];
 
-  var updatedCells = [];
-  var processedRows = 0;
+  // データの処理
+  for (let i = 1; i < numRows; i++) {
+    const row = values[i];
+    const endValue = row[colIndices.end];
+    const confirmScheduleValue = row[colIndices.confirmSchedule];
+    const limitValue = row[colIndices.limit];
 
-  var currentDate = new Date();
-  var currentYearMonth = Utilities.formatDate(currentDate, 'Asia/Tokyo', 'yyyy/MM/dd');
-
-  for (var i = 1; i < dataA.length; i++) {
-    var idA = dataA[i][idIndexA];
-    var dateA = normalizeDate(dataA[i][dateIndexA]);
-    var foundMatch = false;
-
-    for (var j = 1; j < dataB.length; j++) {
-      var idB = dataB[j][idIndexB];
-      var dateB = normalizeDate(dataB[j][dateIndexB]);
-
-      if (idA === idB) {
-        foundMatch = true;
-        var noteB = notesB[j][dateIndexB];
-        
-        if (dateA && dateB && dateA === dateB) {
-          // 日付が一致する場合、Bシートのメモをそのままコピー
-          updatedCells.push({row: i + 1, col: dateIndexA + 1, note: noteB});
-        } else if (dateB) {
-          // 日付が異なる場合、新しいエントリーを追加
-          var dateBObj = new Date(dateB);
-          var oneMonthAgo = new Date(dateBObj.getFullYear(), dateBObj.getMonth() - 1, 1);
-          var oneMonthAgoStr = Utilities.formatDate(oneMonthAgo, 'Asia/Tokyo', 'yyyy/MM');
-          var newEntry = `【${oneMonthAgoStr}】 ${dateB}`;
-          
-          var currentNoteA = sheetA.getRange(i + 1, dateIndexA + 1).getNote();
-          var updatedNote = newEntry + (currentNoteA ? '\n' + currentNoteA : '');
-          updatedCells.push({row: i + 1, col: dateIndexA + 1, note: updatedNote});
-        } else {
-          // Bシートの値が空白の場合
-          var newEntry = `【${currentYearMonth}】 "値なし"`;
-          var currentNoteA = sheetA.getRange(i + 1, dateIndexA + 1).getNote();
-          var updatedNote = newEntry + (currentNoteA ? '\n' + currentNoteA : '');
-          updatedCells.push({row: i + 1, col: dateIndexA + 1, note: updatedNote});
-          updatedCells.push({row: i + 1, col: checkIndexA + 1, value: "要確認"});
-        }
-        break;
-      }
-    }
-
-    if (!foundMatch) {
-      // Bシートに対応するIDがない場合
-      var newEntry = `【${currentYearMonth}】 "値なし"`;
-      var currentNoteA = sheetA.getRange(i + 1, dateIndexA + 1).getNote();
-      var updatedNote = newEntry + (currentNoteA ? '\n' + currentNoteA : '');
-      updatedCells.push({row: i + 1, col: dateIndexA + 1, note: updatedNote});
-      updatedCells.push({row: i + 1, col: checkIndexA + 1, value: "要確認"});
-    }
-
-    processedRows++;
-    if (processedRows % 1000 === 0) {
-      Logger.log(`Processed ${processedRows} rows...`);
+    if (endValue) {
+      // 終了列に値がある場合
+      colorChanges.push({range: sheet.getRange(i + 1, 1, 1, numCols), color: colors.grey});
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '工事完了'});
+    } else if (limitValue && !confirmScheduleValue) {
+      // リミットに値があり確認予定がない場合
+      const rangesToColor = [
+        sheet.getRange(i + 1, colIndices.limit + 1),
+        sheet.getRange(i + 1, colIndices.check + 1),
+        sheet.getRange(i + 1, colIndices.prevMonthConfirm + 1)
+      ];
+      rangesToColor.forEach(range => colorChanges.push({range: range, color: colors.orange}));
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '確認用'});
+    } else if (limitValue && confirmScheduleValue && new Date(limitValue) < new Date(confirmScheduleValue)) {
+      // リミット < 確認予定の場合
+      const rangesToColor = [
+        sheet.getRange(i + 1, colIndices.limit + 1),
+        sheet.getRange(i + 1, colIndices.check + 1),
+        sheet.getRange(i + 1, colIndices.prevMonthConfirm + 1)
+      ];
+      rangesToColor.forEach(range => colorChanges.push({range: range, color: colors.yellow}));
+      valueChanges.push({range: sheet.getRange(i + 1, colIndices.check + 1), value: '遅延あり'});
     }
   }
 
-  // バッチ更新
-  updatedCells.forEach(function(cell) {
-    if (cell.note !== undefined) {
-      sheetA.getRange(cell.row, cell.col).setNote(cell.note);
-    }
-    if (cell.value !== undefined) {
-      sheetA.getRange(cell.row, cell.col).setValue(cell.value);
-    }
-  });
+  // 一括で色の変更を適用
+  colorChanges.forEach(change => change.range.setBackground(change.color));
 
-  var endTime = new Date();
-  var executionTime = (endTime - startTime) / 1000; // 秒単位
-  Logger.log(`Total rows processed: ${processedRows}`);
-  Logger.log(`Execution time: ${executionTime} seconds`);
-}
+  // 一括で値の変更を適用
+  valueChanges.forEach(change => change.range.setValue(change.value));
 
-function normalizeDate(dateValue) {
-  if (dateValue === undefined || dateValue === null || dateValue === '') return null;
-
-  var dateString = '';
-  if (dateValue instanceof Date) {
-    dateString = Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy/MM/dd');
-  } else if (typeof dateValue === 'string') {
-    dateString = dateValue.trim();
-  } else {
-    return null;
-  }
-
-  if (dateString === '') return null;
-
-  var parts = dateString.split('/');
-  if (parts.length !== 3) return null;
-
-  if (isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
-
-  return parts[0] + '/' + parts[1].padStart(2, '0') + '/' + parts[2].padStart(2, '0');
+  // 既存の色を削除
+  sheet.getRange(1, 1, numRows, numCols).setBackground(null);
 }
