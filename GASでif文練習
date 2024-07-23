@@ -28,27 +28,33 @@ function compareAndUpdateSheets() {
     
     if (rowB !== -1) {
       const confirmB = dataB[rowB][confirmColumnB];
-      const noteBRange = sheetB.getRange(rowB + 1, confirmColumnB + 1);
-      const noteB = noteBRange.getNote();
+      const rangeBConfirm = sheetB.getRange(rowB + 1, confirmColumnB + 1);
+      const noteB = rangeBConfirm.getNote();
       const rangeA = sheetA.getRange(i + 1, confirmColumnA + 1);
       const noteA = rangeA.getNote();
       
       let newNote = '';
-      if (confirmB === '') {
-        newNote = `${lastMonthTimestamp} 値なし\n${noteA}`;
-        sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
-      } else if (confirmA === confirmB) {
-        if (noteB) {
+      if (noteB) {
+        // Bシートにメモがある場合の処理
+        if (confirmB === '') {
+          newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
+          sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
+        } else if (confirmA === confirmB) {
           newNote = noteB;
         } else {
-          newNote = noteA; // Bシートにメモがない場合、Aシートの既存のメモを保持
+          const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
+          newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
         }
       } else {
-        const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
-        if (noteB) {
-          newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
+        // Bシートにメモがない場合の処理
+        if (confirmB === '') {
+          newNote = `${lastMonthTimestamp} 値なし\n${noteA}`;
+          sheetA.getRange(i + 1, checkColumnA + 1).setValue('要確認');
+        } else if (confirmA === confirmB) {
+          newNote = noteA; // Aシートの既存のメモを保持
         } else {
-          newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteA}`; // Bシートにメモがない場合、新しい行を追加してAシートの既存のメモを保持
+          const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
+          newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteA}`;
         }
       }
       
