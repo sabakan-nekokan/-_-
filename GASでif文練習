@@ -1,61 +1,45 @@
-function colorSheet() {
+function applyConditionalFormatting() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const dataRange = sheet.getDataRange();
   const values = dataRange.getValues();
-  const numRows = values.length;
-  const numCols = values[0].length;
+  const backgrounds = dataRange.getBackgrounds();
 
-  // ヘッダーから必要な列のインデックスを取得
+  // ヘッダー行からカラムのインデックスを取得
   const headers = values[0];
-  const endIndex = headers.indexOf('終了');
-  const scheduledIndex = headers.indexOf('確認予定');
-  const limitIndex = headers.indexOf('リミット');
-  const checkIndex = headers.indexOf('チェック');
-  const lastMonthIndex = headers.indexOf('前月確認');
+  const endColumnIndex = headers.indexOf('終了');
+  const confirmDateColumnIndex = headers.indexOf('確認予定');
+  const limitColumnIndex = headers.indexOf('リミット');
+  const checkColumnIndex = headers.indexOf('チェック');
+  const prevMonthColumnIndex = headers.indexOf('前月確認');
 
-  // 背景色の設定
-  const greyColor = '#D3D3D3';
-  const orangeColor = '#FFA500';
-  const yellowColor = '#FFFF00';
-
-  // 塗るセルの範囲を保持する配列
-  let greyCells = [];
-  let orangeCells = [];
-  let yellowCells = [];
-
-  // データを走査して条件をチェック
-  for (let i = 1; i < numRows; i++) {
+  // 条件に基づいて背景色を設定
+  for (let i = 1; i < values.length; i++) {
     const row = values[i];
     
-    if (row[endIndex]) {
-      // [終了]に値がある場合、行全体を灰色にする
-      greyCells.push(sheet.getRange(i + 1, 1, 1, numCols));
-    } else {
-      const limit = row[limitIndex];
-      const scheduled = row[scheduledIndex];
+    if (row[endColumnIndex] !== '') {
+      // [終了]に値がある場合、行全体を灰色に
+      for (let j = 0; j < row.length; j++) {
+        backgrounds[i][j] = '#D3D3D3'; // 灰色
+      }
+    } else if (row[limitColumnIndex] !== '' && row[confirmDateColumnIndex] === '') {
+      // [リミット]に値があり[確認予定]がない場合、指定の列をオレンジに
+      backgrounds[i][limitColumnIndex] = '#FFA500'; // オレンジ
+      backgrounds[i][checkColumnIndex] = '#FFA500';
+      backgrounds[i][prevMonthColumnIndex] = '#FFA500';
+    } else if (row[limitColumnIndex] !== '' && row[confirmDateColumnIndex] !== '') {
+      // [リミット]と[確認予定]の日付を比較
+      const limitDate = new Date(row[limitColumnIndex]);
+      const confirmDate = new Date(row[confirmDateColumnIndex]);
       
-      if (limit && !scheduled) {
-        // [リミット]に値があり[確認予定]がない場合
-        orangeCells.push(sheet.getRange(i + 1, limitIndex + 1, 1, 1));
-        orangeCells.push(sheet.getRange(i + 1, checkIndex + 1, 1, 1));
-        orangeCells.push(sheet.getRange(i + 1, lastMonthIndex + 1, 1, 1));
-      } else if (limit && scheduled && new Date(limit) < new Date(scheduled)) {
-        // [リミット]<[確認予定]の場合
-        yellowCells.push(sheet.getRange(i + 1, limitIndex + 1, 1, 1));
-        yellowCells.push(sheet.getRange(i + 1, checkIndex + 1, 1, 1));
-        yellowCells.push(sheet.getRange(i + 1, lastMonthIndex + 1, 1, 1));
+      if (limitDate < confirmDate) {
+        // [リミット] < [確認予定]の場合、指定の列を黄色に
+        backgrounds[i][limitColumnIndex] = '#FFFF00'; // 黄色
+        backgrounds[i][checkColumnIndex] = '#FFFF00';
+        backgrounds[i][prevMonthColumnIndex] = '#FFFF00';
       }
     }
   }
 
-  // 一括で背景色を設定
-  if (greyCells.length > 0) {
-    sheet.getRangeList(greyCells).setBackground(greyColor);
-  }
-  if (orangeCells.length > 0) {
-    sheet.getRangeList(orangeCells).setBackground(orangeColor);
-  }
-  if (yellowCells.length > 0) {
-    sheet.getRangeList(yellowCells).setBackground(yellowColor);
-  }
+  // 一括で背景色を適用
+  dataRange.setBackgrounds(backgrounds);
 }
