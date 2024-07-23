@@ -1,4 +1,4 @@
-function transferAndUpdateData() {
+function updateSheetB() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetA = ss.getSheetByName("Aシート");
   var sheetB = ss.getSheetByName("Bシート");
@@ -14,72 +14,42 @@ function transferAndUpdateData() {
   var idIndexB = headerB.indexOf("ID");
   var remarkIndexB = headerB.indexOf("備考");
   
+  var timestamp = Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy/MM");
+  
   var updatedRows = 0;
   var addedRows = 0;
   
-  var newRows = [];
-  var updateOperations = [];
-
-  // Step 1: データの分類と新規データの準備
   for (var i = 1; i < dataA.length; i++) {
-    var rowA = dataA[i];
-    var idA = rowA[idIndexA];
-    var remarkA = rowA[remarkIndexA];
+    var idA = dataA[i][idIndexA];
+    var remarkA = dataA[i][remarkIndexA];
     
-    if (remarkA && remarkA.trim() !== "") {
-      var foundIndex = -1;
+    if (remarkA && remarkA.trim() !== '') {
+      var found = false;
       for (var j = 1; j < dataB.length; j++) {
+        var idB = dataB[j][idIndexB];
         var remarkB = dataB[j][remarkIndexB];
-        if (dataB[j][idIndexB] === idA && remarkB && remarkB.trim() !== "") {
-          foundIndex = j;
+        
+        if (idA === idB && remarkB && remarkB.trim() !== '') {
+          // IDが一致し、両方の備考が空でない場合、更新
+          sheetB.getRange(j+1, 1, 1, headerB.length).setValues([dataA[i]]);
+          var newRemark = timestamp + " " + remarkA + "\n" + remarkB;
+          sheetB.getRange(j+1, remarkIndexB+1).setValue(newRemark);
+          updatedRows++;
+          found = true;
           break;
         }
       }
       
-      var timestamp = Utilities.formatDate(new Date(), "GMT+9", "yyyy/MM");
-      var newRemark = timestamp + " " + remarkA;
-      
-      if (foundIndex === -1) {
-        // 新規データの準備
-        var newRow = new Array(headerB.length);
-        for (var k = 0; k < headerA.length; k++) {
-          if (k === remarkIndexB) {
-            newRow[k] = newRemark;
-          } else {
-            newRow[k] = rowA[k];
-          }
-        }
-        newRows.push(newRow);
+      if (!found) {
+        // 一致するIDが見つからない場合、新しい行を追加
+        var newRow = dataA[i].slice();
+        newRow[remarkIndexB] = timestamp + " " + remarkA;
+        sheetB.appendRow(newRow);
         addedRows++;
-      } else {
-        // 更新操作の準備
-        updateOperations.push({
-          row: foundIndex + 1,
-          newData: rowA,
-          newRemark: newRemark,
-          existingRemark: dataB[foundIndex][remarkIndexB]
-        });
       }
     }
   }
-
-  // Step 2: 新規データの追加
-  if (newRows.length > 0) {
-    var lastRow = sheetB.getLastRow();
-    sheetB.getRange(lastRow + 1, 1, newRows.length, headerB.length).setValues(newRows);
-  }
-
-  // Step 3: 既存データの更新
-  updateOperations.forEach(function(operation) {
-    for (var k = 0; k < headerA.length; k++) {
-      if (k !== remarkIndexB) {
-        sheetB.getRange(operation.row, k + 1).setValue(operation.newData[k]);
-      }
-    }
-    sheetB.getRange(operation.row, remarkIndexB + 1).setValue(operation.newRemark + "\n" + operation.existingRemark);
-    updatedRows++;
-  });
   
-  Logger.log("追加された行数: " + addedRows);
   Logger.log("更新された行数: " + updatedRows);
+  Logger.log("追加された行数: " + addedRows);
 }
