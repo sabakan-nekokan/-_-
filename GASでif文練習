@@ -1,11 +1,11 @@
 function mainFunction() {
   executeSequentially([
-    function1,
-    function2,
-    function3,
-    function4,
-    function5,
-    function6
+    Function1.execute,
+    Function2.execute,
+    Function3.execute,
+    Function4.execute,
+    Function5.execute,
+    Function6.execute
   ])
   .then(() => {
     console.log("全ての関数が実行完了しました");
@@ -19,52 +19,4 @@ function executeSequentially(functions) {
   return functions.reduce((promise, func) => {
     return promise.then(() => func());
   }, Promise.resolve());
-}
-
-function function1() {
-  return new Promise((resolve) => {
-    Logger.log("関数1が実行されました");
-    // ここに関数1の処理を記述
-    resolve();
-  });
-}
-
-function function2() {
-  return new Promise((resolve) => {
-    Logger.log("関数2が実行されました");
-    // ここに関数2の処理を記述
-    resolve();
-  });
-}
-
-function function3() {
-  return new Promise((resolve) => {
-    Logger.log("関数3が実行されました");
-    // ここに関数3の処理を記述
-    resolve();
-  });
-}
-
-function function4() {
-  return new Promise((resolve) => {
-    Logger.log("関数4が実行されました");
-    // ここに関数4の処理を記述
-    resolve();
-  });
-}
-
-function function5() {
-  return new Promise((resolve) => {
-    Logger.log("関数5が実行されました");
-    // ここに関数5の処理を記述
-    resolve();
-  });
-}
-
-function function6() {
-  return new Promise((resolve) => {
-    Logger.log("関数6が実行されました");
-    // ここに関数6の処理を記述
-    resolve();
-  });
 }
