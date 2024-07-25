@@ -1,60 +1,82 @@
-// メイン関数をasync関数として定義
-async function mainFunction() {
-  try {
-    // JSONファイルを受け取ってスプレッドシートを作成する関数
-    await createSpreadsheetFromJson();
-    
-    // 他の5つの関数を順番に実行
-    await function2();
-    await function3();
-    await function4();
-    await function5();
-    await function6();
-
-    console.log("すべての処理が完了しました");
-  } catch (error) {
-    console.error("エラーが発生しました:", error);
+// メイン関数
+function runAllFunctions() {
+  // Pythonから受け取ったJSONファイルを処理する関数
+  function processJsonAndCreateSheet(jsonData) {
+    return new Promise((resolve, reject) => {
+      try {
+        // JSONデータを処理してスプレッドシートを作成するロジック
+        // この例では、仮のデータを使用しています
+        const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+        sheet.getRange('A1').setValue('Data from Python');
+        
+        // 処理が完了したらresolve()を呼び出す
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
-}
 
-// 以下は各非同期関数の例です。実際の処理に合わせて修正してください。
+  // 他の5つの関数（仮の実装）
+  function function2() {
+    return new Promise(resolve => {
+      // 非同期処理
+      Utilities.sleep(1000);
+      Logger.log('Function 2 executed');
+      resolve();
+    });
+  }
 
-async function createSpreadsheetFromJson() {
-  // Pythonから受け取ったJSONファイルを処理し、スプレッドシートを作成する非同期処理
-  await new Promise(resolve => setTimeout(resolve, 1000)); // 非同期処理のシミュレーション
-  console.log("スプレッドシートを作成しました");
-}
+  function function3() {
+    return new Promise(resolve => {
+      // 非同期処理
+      Utilities.sleep(1000);
+      Logger.log('Function 3 executed');
+      resolve();
+    });
+  }
 
-async function function2() {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log("function2を実行しました");
-}
+  function function4() {
+    return new Promise(resolve => {
+      // 非同期処理
+      Utilities.sleep(1000);
+      Logger.log('Function 4 executed');
+      resolve();
+    });
+  }
 
-async function function3() {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log("function3を実行しました");
-}
+  function function5() {
+    return new Promise(resolve => {
+      // 非同期処理
+      Utilities.sleep(1000);
+      Logger.log('Function 5 executed');
+      resolve();
+    });
+  }
 
-async function function4() {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log("function4を実行しました");
-}
+  function function6() {
+    return new Promise(resolve => {
+      // 非同期処理
+      Utilities.sleep(1000);
+      Logger.log('Function 6 executed');
+      resolve();
+    });
+  }
 
-async function function5() {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log("function5を実行しました");
-}
+  // 仮のJSONデータ（実際にはPythonから受け取ります）
+  const jsonData = '{"key": "value"}';
 
-async function function6() {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  console.log("function6を実行しました");
-}
-
-// メイン関数の実行
-function runMainFunction() {
-  mainFunction().then(() => {
-    console.log("メイン関数の実行が完了しました");
-  }).catch(error => {
-    console.error("メイン関数の実行中にエラーが発生しました:", error);
-  });
+  // 関数を順番に実行
+  processJsonAndCreateSheet(jsonData)
+    .then(() => function2())
+    .then(() => function3())
+    .then(() => function4())
+    .then(() => function5())
+    .then(() => function6())
+    .then(() => {
+      Logger.log('All functions executed successfully');
+    })
+    .catch(error => {
+      Logger.log('Error occurred: ' + error);
+    });
 }
