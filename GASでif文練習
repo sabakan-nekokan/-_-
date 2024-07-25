@@ -1,82 +1,54 @@
-// メイン関数
-function runAllFunctions() {
-  // Pythonから受け取ったJSONファイルを処理する関数
-  function processJsonAndCreateSheet(jsonData) {
-    return new Promise((resolve, reject) => {
-      try {
-        // JSONデータを処理してスプレッドシートを作成するロジック
-        // この例では、仮のデータを使用しています
-        const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-        sheet.getRange('A1').setValue('Data from Python');
+import tkinter as tk
+from tkinter import filedialog
+import openpyxl
+import os
+
+def select_and_validate_file():
+    root = tk.Tk()
+    root.withdraw()  # メインウィンドウを非表示にする
+
+    initial_dir = "C:/Users/YourUsername/Desktop"  # 初期ディレクトリを設定
+    while True:
+        file_path = filedialog.askopenfilename(
+            initialdir=initial_dir,
+            title="Excelファイルを選択してください",
+            filetypes=[("Excel files", "*.xlsx")]
+        )
         
-        // 処理が完了したらresolve()を呼び出す
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
+        if not file_path:  # ユーザーがキャンセルした場合
+            print("ファイル選択がキャンセルされました。")
+            return None
+        
+        file_name = os.path.basename(file_path)
+        
+        if "ああああ" not in file_name:
+            print("ファイル名が違います。'ああああ'を含むファイルを選択してください。")
+            continue
+        
+        try:
+            workbook = openpyxl.load_workbook(file_path)
+            
+            if "いいいい" not in workbook.sheetnames:
+                print("'いいいい'という名前のシートが見つかりません。処理を中断します。")
+                return None
+            
+            sheet = workbook["いいいい"]
+            headers = [cell.value for cell in sheet[1]]
+            
+            if "うううう" not in headers or "ええええ" not in headers:
+                print("ヘッダーに'うううう'と'ええええ'が両方含まれていません。処理を中断します。")
+                return None
+            
+            print(f"ファイル '{file_name}' が正常に検証されました。")
+            return file_path
+        
+        except Exception as e:
+            print(f"ファイルの読み込み中にエラーが発生しました: {e}")
+            continue
 
-  // 他の5つの関数（仮の実装）
-  function function2() {
-    return new Promise(resolve => {
-      // 非同期処理
-      Utilities.sleep(1000);
-      Logger.log('Function 2 executed');
-      resolve();
-    });
-  }
-
-  function function3() {
-    return new Promise(resolve => {
-      // 非同期処理
-      Utilities.sleep(1000);
-      Logger.log('Function 3 executed');
-      resolve();
-    });
-  }
-
-  function function4() {
-    return new Promise(resolve => {
-      // 非同期処理
-      Utilities.sleep(1000);
-      Logger.log('Function 4 executed');
-      resolve();
-    });
-  }
-
-  function function5() {
-    return new Promise(resolve => {
-      // 非同期処理
-      Utilities.sleep(1000);
-      Logger.log('Function 5 executed');
-      resolve();
-    });
-  }
-
-  function function6() {
-    return new Promise(resolve => {
-      // 非同期処理
-      Utilities.sleep(1000);
-      Logger.log('Function 6 executed');
-      resolve();
-    });
-  }
-
-  // 仮のJSONデータ（実際にはPythonから受け取ります）
-  const jsonData = '{"key": "value"}';
-
-  // 関数を順番に実行
-  processJsonAndCreateSheet(jsonData)
-    .then(() => function2())
-    .then(() => function3())
-    .then(() => function4())
-    .then(() => function5())
-    .then(() => function6())
-    .then(() => {
-      Logger.log('All functions executed successfully');
-    })
-    .catch(error => {
-      Logger.log('Error occurred: ' + error);
-    });
-}
+# メイン処理
+selected_file = select_and_validate_file()
+if selected_file:
+    print(f"選択されたファイル: {selected_file}")
+else:
+    print("有効なファイルが選択されませんでした。")
