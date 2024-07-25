@@ -1,54 +1,54 @@
 import tkinter as tk
 from tkinter import filedialog
-import openpyxl
+import pandas as pd
 import os
 
-def select_and_validate_file():
-    root = tk.Tk()
-    root.withdraw()  # メインウィンドウを非表示にする
-
-    initial_dir = "C:/Users/YourUsername/Desktop"  # 初期ディレクトリを設定
+def select_file():
+    initial_dir = "C:/指定したフォルダーのパス"  # 指定したフォルダーのパスを設定
     while True:
-        file_path = filedialog.askopenfilename(
-            initialdir=initial_dir,
-            title="Excelファイルを選択してください",
-            filetypes=[("Excel files", "*.xlsx")]
-        )
+        file_path = filedialog.askopenfilename(initialdir=initial_dir, filetypes=[("Excel files", "*.xlsx")])
         
-        if not file_path:  # ユーザーがキャンセルした場合
+        if not file_path:
             print("ファイル選択がキャンセルされました。")
             return None
-        
+
         file_name = os.path.basename(file_path)
         
         if "ああああ" not in file_name:
             print("ファイル名が違います。'ああああ'を含むファイルを選択してください。")
             continue
-        
+
         try:
-            workbook = openpyxl.load_workbook(file_path)
+            xls = pd.ExcelFile(file_path)
             
-            if "いいいい" not in workbook.sheetnames:
-                print("'いいいい'という名前のシートが見つかりません。処理を中断します。")
-                return None
+            if "いいいい" not in xls.sheet_names:
+                print("'いいいい'という名前のシートが見つかりません。")
+                continue
+
+            df = pd.read_excel(file_path, sheet_name="いいいい")
             
-            sheet = workbook["いいいい"]
-            headers = [cell.value for cell in sheet[1]]
-            
-            if "うううう" not in headers or "ええええ" not in headers:
-                print("ヘッダーに'うううう'と'ええええ'が両方含まれていません。処理を中断します。")
-                return None
-            
-            print(f"ファイル '{file_name}' が正常に検証されました。")
-            return file_path
-        
+            if "うううう" not in df.columns or "ええええ" not in df.columns:
+                print("ヘッダーに'うううう'と'ええええ'が含まれていません。")
+                continue
+
+            print("正しいファイルが選択されました。")
+            return df
+
         except Exception as e:
             print(f"ファイルの読み込み中にエラーが発生しました: {e}")
             continue
 
-# メイン処理
-selected_file = select_and_validate_file()
-if selected_file:
-    print(f"選択されたファイル: {selected_file}")
-else:
-    print("有効なファイルが選択されませんでした。")
+def main():
+    root = tk.Tk()
+    root.withdraw()  # メインウィンドウを非表示にする
+
+    df = select_file()
+    
+    if df is not None:
+        print("ファイルが正常に読み込まれました。")
+        print(df.head())  # データフレームの最初の数行を表示
+    else:
+        print("ファイルの読み込みに失敗しました。")
+
+if __name__ == "__main__":
+    main()
