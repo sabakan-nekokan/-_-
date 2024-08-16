@@ -6,16 +6,11 @@ async function copyFilteredDataBetweenSheets() {
     
     const masterHeaderRow = 6;
     const psHeaderRow = 5;
+    const bsColumnIndex = 71 - 1; // BS列は71列目（0-basedインデックスに変換）
     
     // マスターシートのヘッダーを取得
     const headerRange = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
     const masterHeader = await new Promise(resolve => resolve(headerRange.getValues()[0]));
-    
-    // BS列のインデックスを見つける（0-based）
-    const bsColumnIndex = masterHeader.findIndex(cell => cell === "BS");
-    if (bsColumnIndex === -1) {
-      throw new Error("BS列が見つかりません。");
-    }
     
     // BS列を除いたヘッダーを作成
     const adjustedHeader = masterHeader.filter((_, index) => index !== bsColumnIndex);
@@ -28,7 +23,7 @@ async function copyFilteredDataBetweenSheets() {
       throw new Error("必要な列が見つかりません。");
     }
     
-    // masterSheetのデータと数式を取得（BS列を除く）
+    // masterSheetのデータと数式を取得
     const dataRange = masterSheet.getRange(masterHeaderRow + 1, 1, masterSheet.getLastRow() - masterHeaderRow, masterSheet.getLastColumn());
     const [rawData, rawFormulas] = await Promise.all([
       new Promise(resolve => resolve(dataRange.getValues())),
