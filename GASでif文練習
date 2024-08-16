@@ -10,7 +10,7 @@ async function copyFilteredDataBetweenSheets() {
     
     // マスターシートのヘッダーを取得
     const headerRange = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
-    const masterHeader = await new Promise(resolve => resolve(headerRange.getValues()[0]));
+    const masterHeader = headerRange.getValues()[0];
     
     // BS列を除いたヘッダーを作成
     const adjustedHeader = masterHeader.filter((_, index) => index !== bsColumnIndex);
@@ -23,75 +23,75 @@ async function copyFilteredDataBetweenSheets() {
       throw new Error("必要な列が見つかりません。");
     }
     
+    // ヘッダーの書式をコピー（最適化版）
+    const sourceHeaderRange = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
+    const targetHeaderRange = psSheet.getRange(psHeaderRow, 1, 1, psSheet.getLastColumn());
+    
+    // BS列を除いた列の配列を作成
+    const columnsToKeep = Array.from({length: masterSheet.getLastColumn()}, (_, i) => i + 1)
+                               .filter(col => col !== bsColumnIndex + 1);
+    
+    // 書式をコピー
+    sourceHeaderRange.copyTo(targetHeaderRange, {contentsOnly: true, formatOnly: true});
+    
+    // 値をコピー（BS列を除く）
+    targetHeaderRange.setValues([adjustedHeader]);
+    
+    // セルの幅をコピー
+    columnsToKeep.forEach((col, index) => {
+      psSheet.setColumnWidth(index + 1, masterSheet.getColumnWidth(col));
+    });
+    
     // masterSheetのデータと数式を取得
     const dataRange = masterSheet.getRange(masterHeaderRow + 1, 1, masterSheet.getLastRow() - masterHeaderRow, masterSheet.getLastColumn());
-    const [rawData, rawFormulas] = await Promise.all([
-      new Promise(resolve => resolve(dataRange.getValues())),
-      new Promise(resolve => resolve(dataRange.getFormulas()))
-    ]);
+    const [rawData, rawFormulas] = [dataRange.getValues(), dataRange.getFormulas()];
     
     // BS列を除いたデータと数式を作成
     const data = rawData.map(row => row.filter((_, index) => index !== bsColumnIndex));
     const formulas = rawFormulas.map(row => row.filter((_, index) => index !== bsColumnIndex));
     
     // PSAXのみをフィルターし、元の行番号を保持
-    const filteredDataWithRowNumbers = await new Promise(resolve => {
-      const filtered = data.map((row, index) => {
-        if (row[projectNameIndex] === "PSAX") {
-          return {
-            rowNumber: index + masterHeaderRow + 1, // マスターシートの実際の行番号
-            data: formulas[index].map((formula, colIndex) => formula || row[colIndex])
-          };
-        }
-        return null;
-      }).filter(item => item !== null);
-      resolve(filtered);
-    });
+    const filteredDataWithRowNumbers = data.map((row, index) => {
+      if (row[projectNameIndex] === "PSAX") {
+        return {
+          rowNumber: index + masterHeaderRow + 1, // マスターシートの実際の行番号
+          data: formulas[index].map((formula, colIndex) => formula || row[colIndex])
+        };
+      }
+      return null;
+    }).filter(item => item !== null);
     
     // psSheetをクリア（ヘッダー行の次の行から）
-    await new Promise(resolve => {
-      const lastRow = psSheet.getLastRow();
-      if (lastRow > psHeaderRow) {
-        psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
-      }
-      resolve();
-    });
+    const lastRow = psSheet.getLastRow();
+    if (lastRow > psHeaderRow) {
+      psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
+    }
     
     // フィルタリングされたデータをPSシートに元の行番号を保持してコピー
     if (filteredDataWithRowNumbers.length > 0) {
-      await new Promise(resolve => {
-        filteredDataWithRowNumbers.forEach(item => {
-          const psRow = item.rowNumber - masterHeaderRow + psHeaderRow;
-          psSheet.getRange(psRow, 1, 1, item.data.length).setValues([item.data]);
-        });
-        resolve();
+      filteredDataWithRowNumbers.forEach(item => {
+        const psRow = item.rowNumber - masterHeaderRow + psHeaderRow;
+        psSheet.getRange(psRow, 1, 1, item.data.length).setValues([item.data]);
       });
     }
     
     // psSheetのフィルター処理
-    await new Promise(resolve => {
-      const filterPs = psSheet.getFilter();
-      if (filterPs) {
-        filterPs.remove();
-      }
-      const rangePs = psSheet.getRange(psHeaderRow, 1, Math.max(psSheet.getLastRow() - psHeaderRow + 1, 2), psSheet.getLastColumn());
-      const newFilter = rangePs.createFilter();
-      
-      // 重複チェック列のフィルター設定（○のみ表示）
-      newFilter.setColumnFilterCriteria(duplicateCheckIndex + 1, 
-        SpreadsheetApp.newFilterCriteria()
-        .whenTextEqualTo("○")
-        .build()
-      );
-      resolve();
-    });
+    const filterPs = psSheet.getFilter();
+    if (filterPs) {
+      filterPs.remove();
+    }
+    const rangePs = psSheet.getRange(psHeaderRow, 1, Math.max(psSheet.getLastRow() - psHeaderRow + 1, 2), psSheet.getLastColumn());
+    const newFilter = rangePs.createFilter();
+    
+    // 重複チェック列のフィルター設定（○のみ表示）
+    newFilter.setColumnFilterCriteria(duplicateCheckIndex + 1, 
+      SpreadsheetApp.newFilterCriteria()
+      .whenTextEqualTo("○")
+      .build()
+    );
     
     // WO-ID列を基準に昇順で並び替え（最後の操作として実行）
-    await new Promise(resolve => {
-      const rangeToSort = psSheet.getRange(psHeaderRow + 1, 1, psSheet.getLastRow() - psHeaderRow, psSheet.getLastColumn());
-      rangeToSort.sort({column: woIdIndex + 1, ascending: true});
-      resolve();
-    });
+    rangePs.sort({column: woIdIndex + 1, ascending: true});
     
     console.log("データ処理が完了しました。");
   } catch (error) {
@@ -101,9 +101,5 @@ async function copyFilteredDataBetweenSheets() {
 
 // 関数を実行
 function runAsyncFunction() {
-  copyFilteredDataBetweenSheets().then(() => {
-    console.log("処理が完了しました。");
-  }).catch(error => {
-    console.error("エラーが発生しました：", error);
-  });
+  copyFilteredDataBetweenSheets();
 }
