@@ -5,15 +5,15 @@ async function copyFilteredDataBetweenSheets() {
     const psSheet = ss.getSheetByName("psSheet");
     
     const masterHeaderRow = 6;
-    const psHeaderRow = 5;
+    const psHeaderRow = 6;  // PSシートのヘッダー行を6行目に変更
     const bsColumnIndex = 71 - 1; // BS列は71列目（0-basedインデックスに変換）
     
     // マスターシートのヘッダーを取得
     const headerRange = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
-    const masterHeader = headerRange.getValues()[0];
+    const masterHeader = await headerRange.getValues();
     
     // BS列を除いたヘッダーを作成
-    const adjustedHeader = masterHeader.filter((_, index) => index !== bsColumnIndex);
+    const adjustedHeader = masterHeader[0].filter((_, index) => index !== bsColumnIndex);
     
     const projectNameIndex = adjustedHeader.indexOf("案件名2");
     const woIdIndex = adjustedHeader.indexOf("WO-ID");
@@ -32,19 +32,19 @@ async function copyFilteredDataBetweenSheets() {
                                .filter(col => col !== bsColumnIndex + 1);
     
     // 書式をコピー
-    sourceHeaderRange.copyTo(targetHeaderRange, {contentsOnly: true, formatOnly: true});
+    await sourceHeaderRange.copyTo(targetHeaderRange, {contentsOnly: true, formatOnly: true});
     
     // 値をコピー（BS列を除く）
-    targetHeaderRange.setValues([adjustedHeader]);
+    await targetHeaderRange.setValues([adjustedHeader]);
     
     // セルの幅をコピー
-    columnsToKeep.forEach((col, index) => {
-      psSheet.setColumnWidth(index + 1, masterSheet.getColumnWidth(col));
-    });
+    await Promise.all(columnsToKeep.map(async (col, index) => {
+      await psSheet.setColumnWidth(index + 1, masterSheet.getColumnWidth(col));
+    }));
     
     // masterSheetのデータと数式を取得
     const dataRange = masterSheet.getRange(masterHeaderRow + 1, 1, masterSheet.getLastRow() - masterHeaderRow, masterSheet.getLastColumn());
-    const [rawData, rawFormulas] = [dataRange.getValues(), dataRange.getFormulas()];
+    const [rawData, rawFormulas] = await Promise.all([dataRange.getValues(), dataRange.getFormulas()]);
     
     // BS列を除いたデータと数式を作成
     const data = rawData.map(row => row.filter((_, index) => index !== bsColumnIndex));
@@ -64,34 +64,34 @@ async function copyFilteredDataBetweenSheets() {
     // psSheetをクリア（ヘッダー行の次の行から）
     const lastRow = psSheet.getLastRow();
     if (lastRow > psHeaderRow) {
-      psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
+      await psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
     }
     
     // フィルタリングされたデータをPSシートに元の行番号を保持してコピー
     if (filteredDataWithRowNumbers.length > 0) {
-      filteredDataWithRowNumbers.forEach(item => {
+      await Promise.all(filteredDataWithRowNumbers.map(async item => {
         const psRow = item.rowNumber - masterHeaderRow + psHeaderRow;
-        psSheet.getRange(psRow, 1, 1, item.data.length).setValues([item.data]);
-      });
+        await psSheet.getRange(psRow, 1, 1, item.data.length).setValues([item.data]);
+      }));
     }
     
     // psSheetのフィルター処理
     const filterPs = psSheet.getFilter();
     if (filterPs) {
-      filterPs.remove();
+      await filterPs.remove();
     }
     const rangePs = psSheet.getRange(psHeaderRow, 1, Math.max(psSheet.getLastRow() - psHeaderRow + 1, 2), psSheet.getLastColumn());
-    const newFilter = rangePs.createFilter();
+    const newFilter = await rangePs.createFilter();
     
     // 重複チェック列のフィルター設定（○のみ表示）
-    newFilter.setColumnFilterCriteria(duplicateCheckIndex + 1, 
+    await newFilter.setColumnFilterCriteria(duplicateCheckIndex + 1, 
       SpreadsheetApp.newFilterCriteria()
       .whenTextEqualTo("○")
       .build()
     );
     
     // WO-ID列を基準に昇順で並び替え（最後の操作として実行）
-    rangePs.sort({column: woIdIndex + 1, ascending: true});
+    await rangePs.sort({column: woIdIndex + 1, ascending: true});
     
     console.log("データ処理が完了しました。");
   } catch (error) {
@@ -101,5 +101,9 @@ async function copyFilteredDataBetweenSheets() {
 
 // 関数を実行
 function runAsyncFunction() {
-  copyFilteredDataBetweenSheets();
+  copyFilteredDataBetweenSheets().then(() => {
+    console.log("処理が完了しました。");
+  }).catch(error => {
+    console.error("エラーが発生しました：", error);
+  });
 }
