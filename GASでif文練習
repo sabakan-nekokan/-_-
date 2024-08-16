@@ -23,6 +23,18 @@ async function copyFilteredDataBetweenSheets() {
       throw new Error("必要な列が見つかりません。");
     }
     
+    // マスターシートのヘッダー書式をコピー
+    const masterHeaderFormatRange = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
+    const psHeaderFormatRange = psSheet.getRange(psHeaderRow, 1, 1, psSheet.getLastColumn());
+    masterHeaderFormatRange.copyTo(psHeaderFormatRange, {formatOnly: true});
+    
+    // セルの幅をコピー
+    for (let i = 1; i <= masterSheet.getLastColumn(); i++) {
+      if (i !== bsColumnIndex + 1) {  // BS列をスキップ
+        psSheet.setColumnWidth(i, masterSheet.getColumnWidth(i));
+      }
+    }
+    
     // masterSheetのデータと数式を取得
     const dataRange = masterSheet.getRange(masterHeaderRow + 1, 1, masterSheet.getLastRow() - masterHeaderRow, masterSheet.getLastColumn());
     const [rawData, rawFormulas] = await Promise.all([
@@ -48,21 +60,12 @@ async function copyFilteredDataBetweenSheets() {
       resolve(filtered);
     });
     
-    // psSheetをクリア（ヘッダー行を含む）
+    // psSheetをクリア（ヘッダー行の次の行から）
     await new Promise(resolve => {
-      psSheet.clear();
-      resolve();
-    });
-    
-    // マスターシートのヘッダー行の内容と書式をPSシートにコピー
-    await new Promise(resolve => {
-      const masterHeaderRangeWithFormat = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
-      const psHeaderRange = psSheet.getRange(psHeaderRow, 1, 1, psSheet.getLastColumn());
-      masterHeaderRangeWithFormat.copyTo(psHeaderRange, {contentsOnly: false, formatOnly: false});
-      
-      // BS列を削除
-      psSheet.deleteColumn(bsColumnIndex + 1);
-      
+      const lastRow = psSheet.getLastRow();
+      if (lastRow > psHeaderRow) {
+        psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
+      }
       resolve();
     });
     
