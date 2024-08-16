@@ -48,20 +48,21 @@ async function copyFilteredDataBetweenSheets() {
       resolve(filtered);
     });
     
-    // psSheetをクリア（ヘッダー行の次の行から）
+    // psSheetをクリア（ヘッダー行を含む）
     await new Promise(resolve => {
-      const lastRow = psSheet.getLastRow();
-      if (lastRow > psHeaderRow) {
-        psSheet.getRange(psHeaderRow + 1, 1, lastRow - psHeaderRow, psSheet.getLastColumn()).clear();
-      }
+      psSheet.clear();
       resolve();
     });
     
-    // マスターシートのヘッダー行の書式をPSシートにコピー
+    // マスターシートのヘッダー行の内容と書式をPSシートにコピー
     await new Promise(resolve => {
       const masterHeaderRangeWithFormat = masterSheet.getRange(masterHeaderRow, 1, 1, masterSheet.getLastColumn());
       const psHeaderRange = psSheet.getRange(psHeaderRow, 1, 1, psSheet.getLastColumn());
-      masterHeaderRangeWithFormat.copyTo(psHeaderRange, {contentsOnly: false, formatOnly: true});
+      masterHeaderRangeWithFormat.copyTo(psHeaderRange, {contentsOnly: false, formatOnly: false});
+      
+      // BS列を削除
+      psSheet.deleteColumn(bsColumnIndex + 1);
+      
       resolve();
     });
     
