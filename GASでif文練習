@@ -16,33 +16,36 @@ function countAndUpdateMatchingRows() {
 
   const monthCounts = {};
   const combinations = {};
+  let logMessages = [];
 
   // ターゲットシートの日付行（71行目）を取得
   const dateRow = targetData[70];
 
-  // 日付列のインデックスを特定（H列から開始）
+  // 日付列のインデックスを特定（G列からR列まで）
   const dateColumns = {};
-  for (let i = 7; i < dateRow.length; i++) {
+  for (let i = 6; i <= 17; i++) { // G列は6、R列は17
     if (dateRow[i]) {
-      const dateString = formatDate(new Date(dateRow[i]));
+      const dateString = dateRow[i]; // すでに "YY/MM" 形式なのでそのまま使用
       dateColumns[dateString] = i;
+      monthCounts[dateString] = 0; // 全ての月を0で初期化
     }
   }
+  logMessages.push(`初期化された月: ${Object.keys(monthCounts).join(", ")}`);
 
   for (let i = 6; i < sourceData.length; i++) { // 7行目以降を処理
     const currentRow = sourceData[i];
     if (currentRow[colIndexes.caColumn] === "撤去自前申請") {
       const combination = `${currentRow[colIndexes.hColumn]},${currentRow[colIndexes.baColumn]}`;
-      const dateString = formatDate(new Date(currentRow[colIndexes.bfColumn]));
+      const dateString = formatDateToYYMM(currentRow[colIndexes.bfColumn]);
       
-      if (combination in combinations) {
-        if (dateString in monthCounts) {
+      if (dateString in monthCounts) {
+        if (combination in combinations) {
           monthCounts[dateString]++;
+          logMessages.push(`重複カウント増加: ${dateString}, 組み合わせ: ${combination}`);
         } else {
-          monthCounts[dateString] = 1;
+          combinations[combination] = true;
+          logMessages.push(`新しい組み合わせ記録: ${dateString}, 組み合わせ: ${combination}`);
         }
-      } else {
-        combinations[combination] = true;
       }
     }
   }
@@ -50,16 +53,25 @@ function countAndUpdateMatchingRows() {
   // 結果を記入
   const targetRow = 73; // PSAX単月 撤去自前申請の行
   for (const [dateString, count] of Object.entries(monthCounts)) {
-    if (dateString in dateColumns) {
-      const col = dateColumns[dateString] + 1; // スプレッドシートの列は1から始まるため
-      targetSheet.getRange(targetRow, col).setValue(count);
-    }
+    const col = dateColumns[dateString] + 1; // スプレッドシートの列は1から始まるため
+    targetSheet.getRange(targetRow, col).setValue(count);
+    logMessages.push(`入力: ${dateString} (列${col}), 値: ${count}`);
   }
+
+  // ログの出力
+  Logger.log("処理ログ:");
+  logMessages.forEach(msg => Logger.log(msg));
+  Logger.log(`最終的な月ごとのカウント: ${JSON.stringify(monthCounts)}`);
 }
 
 // 日付を 'YY/MM' 形式にフォーマットする関数
-function formatDate(date) {
-  const year = date.getFullYear().toString().slice(-2);
-  const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  return `${year}/${month}`;
+function formatDateToYYMM(date) {
+  if (date instanceof Date) {
+    const year = date.getFullYear().toString().slice(-2);
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    return `${year}/${month}`;
+  }
+  // 日付でない場合はnullを返す
+  Logger.log(`無効な日付値: ${date}`);
+  return null;
 }
