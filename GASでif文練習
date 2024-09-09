@@ -16,6 +16,7 @@ function countAndUpdateMatchingRows() {
   const monthCounts = {};
   const combinations = {};
   let logMessages = [];
+  let invalidDates = []; // 無効な日付を記録する配列
   
   // ターゲットシートの日付行（71行目）を取得
   const dateRow = targetData[70];
@@ -34,14 +35,20 @@ function countAndUpdateMatchingRows() {
     const currentRow = sourceData[i];
     if (currentRow[colIndexes.processFlag] === "o") {
       const combination = `${currentRow[colIndexes.hColumn]},${currentRow[colIndexes.baColumn]}`;
-      const dateString = formatDateToYYMM(currentRow[colIndexes.bwColumn]);
+      const originalDate = currentRow[colIndexes.bwColumn];
+      const dateString = formatDateToYYMM(originalDate);
       
-      if (dateString && dateString in monthCounts) {
+      if (dateString === null) {
+        invalidDates.push({row: i + 1, value: originalDate}); // 行番号は1から始まるため+1
+        continue; // 無効な日付はスキップ
+      }
+      
+      if (dateString in monthCounts) {
+        if (!combinations[dateString]) {
+          combinations[dateString] = {};
+        }
         if (!(combination in combinations[dateString])) {
           monthCounts[dateString]++;
-          if (!combinations[dateString]) {
-            combinations[dateString] = {};
-          }
           combinations[dateString][combination] = true;
           logMessages.push(`カウント増加: ${dateString}, 組み合わせ: ${combination}`);
         } else {
@@ -63,19 +70,28 @@ function countAndUpdateMatchingRows() {
   Logger.log("処理ログ:");
   logMessages.forEach(msg => Logger.log(msg));
   Logger.log(`最終的な月ごとのカウント: ${JSON.stringify(monthCounts)}`);
+  
+  // 無効な日付のログ
+  if (invalidDates.length > 0) {
+    Logger.log("無効な日付:");
+    invalidDates.forEach(({row, value}) => {
+      Logger.log(`行 ${row}: ${value}`);
+    });
+  } else {
+    Logger.log("無効な日付はありませんでした。");
+  }
 }
 
 // 日付を 'YY/MM' 形式にフォーマットする関数
 function formatDateToYYMM(dateString) {
   if (typeof dateString === 'string') {
     const parts = dateString.split('/');
-    if (parts.length === 2) {
+    if (parts.length === 2 && parts[0].length === 4 && parts[1].length === 2) {
       const year = parts[0].slice(-2);
-      const month = parts[1].padStart(2, '0');
+      const month = parts[1];
       return `${year}/${month}`;
     }
   }
   // 無効な日付形式の場合はnullを返す
-  Logger.log(`無効な日付値: ${dateString}`);
   return null;
 }
