@@ -1,59 +1,81 @@
-function checkCa() {
+function countAndUpdateMatchingRows() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("撤去可能ビル確認（PS）テスト用");
-  const data = sheet.getDataRange().getValues();
-  const headers = data[5];  // ヘッダーは6行目 (インデックス5)
-  const lastRow = sheet.getLastRow();
-
+  const sourceSheet = ss.getSheetByName("撤去可能ビル確認（PS）");
+  const targetSheet = ss.getSheetByName("週次報告集計");
+  
+  const sourceData = sourceSheet.getDataRange().getValues();
+  const targetData = targetSheet.getDataRange().getValues();
+  
+  const headers = sourceData[5]; // 6行目がヘッダー行
   const colIndexes = {
-    dColum: headers.indexOf("案件実行状況"),
-    bfColum: headers.indexOf("NTT申請日"),
-    bzColum: headers.indexOf("過次ピボット"),
-    caColum: headers.indexOf("撤去自前申請判定"),
-    processFlagColum: headers.indexOf("処理フラグ"),
-    stationNameColum: headers.indexOf("局社名"),
-    woIdColum: headers.indexOf("WO-ID")
+    hColumn: headers.indexOf("H列の名前"),
+    baColumn: headers.indexOf("BA列の名前"),
+    processFlag: headers.indexOf("処理フラグ"),
+    bwColumn: headers.indexOf("BW列の名前") // 撤去予定月列
   };
-
-  // 列のインデックスが正しく取得できていることを確認
-  console.log("Column Indexes:", colIndexes);
-
-  // "撤去自前申請判定" と "処理フラグ" 列をクリア
-  if (colIndexes.caColum !== -1) {
-    sheet.getRange(7, colIndexes.caColum + 1, lastRow - 6).clearContent();
+  const monthCounts = {};
+  const combinations = {};
+  let logMessages = [];
+  
+  // ターゲットシートの日付行（71行目）を取得
+  const dateRow = targetData[70];
+  // 日付列のインデックスを特定（G列からR列まで）
+  const dateColumns = {};
+  for (let i = 6; i <= 17; i++) { // G列は6、R列は17
+    if (dateRow[i]) {
+      const dateString = dateRow[i]; // すでに "YY/MM" 形式なのでそのまま使用
+      dateColumns[dateString] = i;
+      monthCounts[dateString] = 0; // 全ての月を0で初期化
+    }
   }
-  if (colIndexes.processFlagColum !== -1) {
-    sheet.getRange(7, colIndexes.processFlagColum + 1, lastRow - 6).clearContent();
-  }
-
-  // 一意の組み合わせを格納するためのSetを作成
-  const processedCombinations = new Set();
-
-  // 7行目（インデックス6）からデータを処理
-  for (let i = 6; i < data.length; i++) {
-    const row = data[i];
-    
-    if ((row[colIndexes.bzColum] === "DB登録前" || row[colIndexes.bzColum] === "撤去可能ビル") &&
-        row[colIndexes.dColum] === "実行中" &&
-        row[colIndexes.bfColum] !== "") {
+  logMessages.push(`初期化された月: ${Object.keys(monthCounts).join(", ")}`);
+  
+  for (let i = 6; i < sourceData.length; i++) { // 7行目以降を処理
+    const currentRow = sourceData[i];
+    if (currentRow[colIndexes.processFlag] === "o") {
+      const combination = `${currentRow[colIndexes.hColumn]},${currentRow[colIndexes.baColumn]}`;
+      const dateString = formatDateToYYMM(currentRow[colIndexes.bwColumn]);
       
-      // 必ず "処理フラグ" 列に "o" を入力
-      if (colIndexes.processFlagColum !== -1) {
-        sheet.getRange(i + 1, colIndexes.processFlagColum + 1).setValue("o");
-      }
-
-      // "局社名" と "WO-ID" の組み合わせをチェック
-      const combination = `${row[colIndexes.stationNameColum]}_${row[colIndexes.woIdColum]}`;
-      
-      if (!processedCombinations.has(combination)) {
-        if (colIndexes.caColum !== -1) {
-          sheet.getRange(i + 1, colIndexes.caColum + 1).setValue("撤去自前申請");
+      if (dateString && dateString in monthCounts) {
+        if (!(combination in combinations[dateString])) {
+          monthCounts[dateString]++;
+          if (!combinations[dateString]) {
+            combinations[dateString] = {};
+          }
+          combinations[dateString][combination] = true;
+          logMessages.push(`カウント増加: ${dateString}, 組み合わせ: ${combination}`);
+        } else {
+          logMessages.push(`重複スキップ: ${dateString}, 組み合わせ: ${combination}`);
         }
-        processedCombinations.add(combination);
       }
     }
   }
+  
+  // 結果を記入
+  const targetRow = 73; // PSAX単月 撤去自前申請の行
+  for (const [dateString, count] of Object.entries(monthCounts)) {
+    const col = dateColumns[dateString] + 1; // スプレッドシートの列は1から始まるため
+    targetSheet.getRange(targetRow, col).setValue(count);
+    logMessages.push(`入力: ${dateString} (列${col}), 値: ${count}`);
+  }
+  
+  // ログの出力
+  Logger.log("処理ログ:");
+  logMessages.forEach(msg => Logger.log(msg));
+  Logger.log(`最終的な月ごとのカウント: ${JSON.stringify(monthCounts)}`);
+}
 
-  // 処理された組み合わせの数をログに出力
-  console.log("Processed combinations:", processedCombinations.size);
+// 日付を 'YY/MM' 形式にフォーマットする関数
+function formatDateToYYMM(dateString) {
+  if (typeof dateString === 'string') {
+    const parts = dateString.split('/');
+    if (parts.length === 2) {
+      const year = parts[0].slice(-2);
+      const month = parts[1].padStart(2, '0');
+      return `${year}/${month}`;
+    }
+  }
+  // 無効な日付形式の場合はnullを返す
+  Logger.log(`無効な日付値: ${dateString}`);
+  return null;
 }
