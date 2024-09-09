@@ -2,7 +2,7 @@ function checkCa() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName("撤去可能ビル確認（PS）テスト用");
   const data = sheet.getDataRange().getValues();
-  const headers = data[5];
+  const headers = data[5];  // ヘッダーは6行目 (インデックス5)
   const lastRow = sheet.getLastRow();
 
   const colIndexes = {
@@ -15,28 +15,45 @@ function checkCa() {
     woIdColum: headers.indexOf("WO-ID")
   };
 
-  // Clear both "撤去自前申請判定" and "処理フラグ" columns
-  sheet.getRange(7, colIndexes.caColum + 1, lastRow - 6).clear();
-  sheet.getRange(7, colIndexes.processFlagColum + 1, lastRow - 6).clear();
+  // 列のインデックスが正しく取得できていることを確認
+  console.log("Column Indexes:", colIndexes);
 
-  // Create a Set to store unique combinations of "局社名" and "WO-ID"
+  // "撤去自前申請判定" と "処理フラグ" 列をクリア
+  if (colIndexes.caColum !== -1) {
+    sheet.getRange(7, colIndexes.caColum + 1, lastRow - 6).clearContent();
+  }
+  if (colIndexes.processFlagColum !== -1) {
+    sheet.getRange(7, colIndexes.processFlagColum + 1, lastRow - 6).clearContent();
+  }
+
+  // 一意の組み合わせを格納するためのSetを作成
   const processedCombinations = new Set();
 
-  data.slice(6).forEach((row, i) => {
+  // 7行目（インデックス6）からデータを処理
+  for (let i = 6; i < data.length; i++) {
+    const row = data[i];
+    
     if ((row[colIndexes.bzColum] === "DB登録前" || row[colIndexes.bzColum] === "撤去可能ビル") &&
         row[colIndexes.dColum] === "実行中" &&
         row[colIndexes.bfColum] !== "") {
       
-      // Always set "o" in the "処理フラグ" column
-      sheet.getRange(i + 7, colIndexes.processFlagColum + 1).setValue("o");
+      // 必ず "処理フラグ" 列に "o" を入力
+      if (colIndexes.processFlagColum !== -1) {
+        sheet.getRange(i + 1, colIndexes.processFlagColum + 1).setValue("o");
+      }
 
-      // Check for unique combination of "局社名" and "WO-ID"
+      // "局社名" と "WO-ID" の組み合わせをチェック
       const combination = `${row[colIndexes.stationNameColum]}_${row[colIndexes.woIdColum]}`;
       
       if (!processedCombinations.has(combination)) {
-        sheet.getRange(i + 7, colIndexes.caColum + 1).setValue("撤去自前申請");
+        if (colIndexes.caColum !== -1) {
+          sheet.getRange(i + 1, colIndexes.caColum + 1).setValue("撤去自前申請");
+        }
         processedCombinations.add(combination);
       }
     }
-  });
+  }
+
+  // 処理された組み合わせの数をログに出力
+  console.log("Processed combinations:", processedCombinations.size);
 }
