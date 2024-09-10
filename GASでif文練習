@@ -1,16 +1,177 @@
-} else if (bzColumnValue === "撤去可能ビル") {
-  category = 'possibleRemoval';
-  rawDate = row[colIndexes.acColumn];
-  console.log(`撤去可能ビル rawDate: ${rawDate}, 型: ${typeof rawDate}`);
-  if (rawDate instanceof Date) {
-    console.log('Date型です');
-  } else if (typeof rawDate === 'string') {
-    console.log('文字列型です');
-  } else if (rawDate === null) {
-    console.log('null値です');
-  } else if (rawDate === undefined) {
-    console.log('undefined値です');
-  } else {
-    console.log(`その他の型です: ${Object.prototype.toString.call(rawDate)}`);
+function inputpivot() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheet = ss.getSheetByName("3GSS_マスターファイル_V1.0");
+  const targetSheet = ss.getSheetByName("週次報告集計 のコピー 2");
+
+  const sourceData = sourceSheet.getDataRange().getValues();
+  const targetData = targetSheet.getDataRange().getValues();
+
+  const headers = sourceData[5]; // 6行目がヘッダー行
+  const colIndexes = getColumnIndexes(headers);
+
+  const monthCounts = initializeMonthCounts();
+  const dateColumns = getDateColumns(targetData[70]);
+  const logMessages = [];
+
+  const psaxRemovalData = filterPsaxRemovalData(sourceData, colIndexes);
+  const uniqueCombinations = initializeUniqueCombinations();
+
+  processPsaxRemovalData(psaxRemovalData, colIndexes, monthCounts, uniqueCombinations, logMessages);
+  writeResultsToSheet(targetData, monthCounts, targetSheet, dateColumns, logMessages);
+  logResults(monthCounts, psaxRemovalData, uniqueCombinations, logMessages);
+}
+
+function getColumnIndexes(headers) {
+  return {
+    hColumn: headers.indexOf("局舎名"),
+    baColumn: headers.indexOf("撤去_WOID"),
+    bzColumn: headers.indexOf("週次ピボット"),
+    bwColumn: headers.indexOf("撤去予定月"),
+    ankenName2Column: headers.indexOf("案件名２"),
+    acColumn: headers.indexOf("実地局回線完了日")
+  };
+}
+
+function initializeMonthCounts() {
+  return {
+    completed: {}, planned: {}, tentative: {}, selfApplied: {}, possibleRemoval: {}
+  };
+}
+
+function getDateColumns(dateRow) {
+  const dateColumns = {};
+  for (let i = 6; i <= 17; i++) {
+    if (dateRow[i]) {
+      const formattedDateString = formatDate(dateRow[i]);
+      dateColumns[formattedDateString] = i;
+    }
   }
+  return dateColumns;
+}
+
+function formatDate(dateValue) {
+  if (dateValue instanceof Date) {
+    if (isNaN(dateValue.getTime())) return null;
+    return `${dateValue.getFullYear().toString().slice(-2)}/${(dateValue.getMonth() + 1).toString().padStart(2, '0')}`;
+  } else if (typeof dateValue === 'string') {
+    const parts = dateValue.split('/');
+    if (parts.length === 3 || parts.length === 2) {
+      return `${parts[0].slice(-2)}/${parts[1].padStart(2, '0')}`;
+    }
+  }
+  return null;
+}
+
+function filterPsaxRemovalData(sourceData, colIndexes) {
+  return sourceData.filter((row, index) => 
+    index > 5 && row[colIndexes.ankenName2Column] === "PSAX撤去"
+  );
+}
+
+function initializeUniqueCombinations() {
+  return {
+    completed: new Set(), planned: new Set(), tentative: new Set(),
+    selfApplied: new Set(), possibleRemoval: new Set()
+  };
+}
+
+function processPsaxRemovalData(data, colIndexes, monthCounts, uniqueCombinations, logMessages) {
+  data.forEach(row => {
+    const category = getCategoryFromRow(row, colIndexes);
+    if (!category) return;
+
+    const combinationKey = `${row[colIndexes.hColumn]}_${row[colIndexes.baColumn]}`;
+    if (uniqueCombinations[category].has(combinationKey)) return;
+    uniqueCombinations[category].add(combinationKey);
+
+    const rawDate = category === 'possibleRemoval' ? row[colIndexes.acColumn] : row[colIndexes.bwColumn];
+    processDate(rawDate, category, monthCounts, logMessages);
+  });
+}
+
+function getCategoryFromRow(row, colIndexes) {
+  const bzColumnValue = row[colIndexes.bzColumn];
+  const categoryMap = {
+    "N検完了": 'completed',
+    "N検予定": 'planned',
+    "仮定": 'tentative',
+    "撤去自前申請": 'selfApplied',
+    "撤去可能ビル": 'possibleRemoval'
+  };
+  return categoryMap[bzColumnValue];
+}
+
+function processDate(rawDate, category, monthCounts, logMessages) {
+  if (rawDate instanceof Date || typeof rawDate === 'string') {
+    const formattedDate = formatDate(rawDate);
+    if (formattedDate && formattedDate.match(/^\d{2}\/\d{2}$/)) {
+      if (formattedDate in monthCounts[category]) {
+        monthCounts[category][formattedDate]++;
+      } else {
+        logMessages.push(`警告: ${formattedDate} は有効な月のリストにございません。rawDate: ${rawDate}`);
+      }
+    } else {
+      logMessages.push(`警告: 無効な日付形式 "${rawDate}" が見つかりました。フォーマット後: ${formattedDate}`);
+    }
+  } else {
+    logMessages.push(`警告: 無効な日付値 "${rawDate}" が見つかりました。タイプ: ${typeof rawDate}`);
+  }
+}
+
+function writeResultsToSheet(targetData, monthCounts, targetSheet, dateColumns, logMessages) {
+  const patterns = [
+    { name: 'PSAX単月N検完了', counts: monthCounts.completed },
+    { name: 'PSAX単月N検予定', counts: monthCounts.planned },
+    { name: 'PSAX単月仮予定', counts: monthCounts.tentative },
+    { name: 'PSAX単月撤去自前申請', counts: monthCounts.selfApplied },
+    { name: 'PSAX単月撤去可能ビル', counts: monthCounts.possibleRemoval }
+  ];
+
+  patterns.forEach(pattern => {
+    const targetRow = targetData.findIndex(row => row[4] === pattern.name) + 1;
+    if (targetRow === 0) {
+      logMessages.push(`エラー: targetSheetに列名"${pattern.name}"の行が見つかりませんでした。`);
+    } else {
+      writeResults(targetRow, pattern.counts, targetSheet, dateColumns, logMessages);
+      logMessages.push(`${pattern.name}のカウント結果をtargetSheetに入力しました。`);
+    }
+  });
+}
+
+function writeResults(targetRow, counts, targetSheet, dateColumns, logMessages) {
+  Object.entries(counts).forEach(([dateString, count]) => {
+    const col = dateColumns[dateString] + 1;
+    targetSheet.getRange(targetRow, col).setValue(count);
+    logMessages.push(`入力: ${dateString} (列${col}), 値: ${count}`);
+  });
+}
+
+function logResults(monthCounts, psaxRemovalData, uniqueCombinations, logMessages) {
+  console.log("\n=== 処理結果のサマリー ===\n");
+
+  console.log("1. 月別カウント結果:");
+  Object.entries(monthCounts).forEach(([type, counts]) => {
+    console.log(`\n  ${type.toUpperCase()}:`);
+    Object.entries(counts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([month, count]) => {
+        console.log(`    ${month}: ${count}件`);
+      });
+  });
+
+  console.log("\n2. 全体の処理行数:", psaxRemovalData.length);
+
+  console.log("\n3. カテゴリー別ユニークな組み合わせ数:");
+  Object.entries(uniqueCombinations).forEach(([category, set]) => {
+    console.log(`  ${category}: ${set.size}`);
+  });
+
+  if (logMessages.length > 0) {
+    console.log("\n4. 警告・情報メッセージ:");
+    logMessages.forEach((msg, index) => {
+      console.log(`  ${index + 1}. ${msg}`);
+    });
+  }
+
+  console.log("\n=== 処理完了 ===");
 }
