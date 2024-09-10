@@ -55,25 +55,41 @@ const psaxRemovalCompletedData = psaxRemovalData.filter(row => {
 
 console.log(`PSAX撤去かつN件完了でフィルターをかけた結果：${psaxRemovalCompletedData.length}行のデータが見つかりました。`);
 
-// 撤去予定月の処理とカウント
+// 重複チェック用のSetを作成
+const uniqueCombinations = new Set();
+
+// 撤去予定月の処理とカウント（重複除外）
 psaxRemovalCompletedData.forEach(row => {
-  const rawDate = row[colIndexes.bwColumn];
-  if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{2}$/)) {
-    const formattedDate = formatDate(rawDate);
-    if (formattedDate in monthCounts) {
-      monthCounts[formattedDate]++;
+  const hColumnValue = row[colIndexes.hColumn];
+  const baColumnValue = row[colIndexes.baColumn];
+  const combinationKey = `${hColumnValue}_${baColumnValue}`;
+
+  // 重複チェック
+  if (!uniqueCombinations.has(combinationKey)) {
+    uniqueCombinations.add(combinationKey);
+
+    const rawDate = row[colIndexes.bwColumn];
+    if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{2}$/)) {
+      const formattedDate = formatDate(rawDate);
+      if (formattedDate in monthCounts) {
+        monthCounts[formattedDate]++;
+      } else {
+        console.log(`警告: ${formattedDate} は有効な月のリストに含まれていません。`);
+      }
     } else {
-      console.log(`警告: ${formattedDate} は有効な月のリストに含まれていません。`);
+      console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。`);
     }
-  } else {
-    console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。`);
   }
+  // 重複の場合はスキップ（何もしない）
 });
 
 // 結果の出力
-console.log("月別カウント結果:");
+console.log("月別カウント結果（重複除外）:");
 Object.entries(monthCounts).forEach(([month, count]) => {
   console.log(`${month}: ${count}件`);
 });
+
+console.log(`全体の行数: ${psaxRemovalCompletedData.length}`);
+console.log(`重複を除いた行数: ${uniqueCombinations.size}`);
 
 // さらなる処理や結果の出力をここに追加...
