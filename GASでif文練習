@@ -9,16 +9,18 @@ const headers = sourceData[5]; // 6行目がヘッダー行
 const colIndexes = {
   hColumn: headers.indexOf("局名"),
   baColumn: headers.indexOf("撤去WOID"),
-  processFlag: headers.indexOf("撤去自前申請判定"),
   bzColumn: headers.indexOf("過失レポート"),
   bwColumn: headers.indexOf("撤去予定月"),
+  acColumn: headers.indexOf("基地局回線廃止完了日"),
   ankenName2Column: headers.indexOf("案件名2")
 };
 
 let monthCounts = {
   completed: {},
   planned: {},
-  tentative: {}
+  tentative: {},
+  selfApplied: {},
+  possibleRemoval: {}
 };
 let logMessages = [];
 let invalidDates = [];
@@ -35,12 +37,17 @@ for (let i = 6; i <= 17; i++) {
     monthCounts.completed[formattedDateString] = 0;
     monthCounts.planned[formattedDateString] = 0;
     monthCounts.tentative[formattedDateString] = 0;
+    monthCounts.selfApplied[formattedDateString] = 0;
+    monthCounts.possibleRemoval[formattedDateString] = 0;
   }
 }
 
 function formatDate(dateString) {
   const parts = dateString.split('/');
   if (parts.length === 2) {
+    return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
+  } else if (parts.length === 3) {
+    // yyyy/mm/dd 形式の日付を処理
     return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
   }
   return dateString;
@@ -56,7 +63,9 @@ const psaxRemovalData = sourceData.filter((row, index) => {
 const uniqueCombinations = {
   completed: new Set(),
   planned: new Set(),
-  tentative: new Set()
+  tentative: new Set(),
+  selfApplied: new Set(),
+  possibleRemoval: new Set()
 };
 
 // 撤去予定月の処理とカウント（カテゴリーごとに初出のみカウント）
@@ -65,15 +74,25 @@ psaxRemovalData.forEach(row => {
   const baColumnValue = row[colIndexes.baColumn];
   const combinationKey = `${hColumnValue}_${baColumnValue}`;
   const bzColumnValue = row[colIndexes.bzColumn];
-  const rawDate = row[colIndexes.bwColumn];
 
   let category;
+  let rawDate;
+
   if (bzColumnValue === "N件完了") {
     category = 'completed';
+    rawDate = row[colIndexes.bwColumn];
   } else if (bzColumnValue === "N件予定") {
     category = 'planned';
+    rawDate = row[colIndexes.bwColumn];
   } else if (bzColumnValue === "仮予定") {
     category = 'tentative';
+    rawDate = row[colIndexes.bwColumn];
+  } else if (bzColumnValue === "撤去自前申請") {
+    category = 'selfApplied';
+    rawDate = row[colIndexes.bwColumn];
+  } else if (bzColumnValue === "撤去可能ビル") {
+    category = 'possibleRemoval';
+    rawDate = row[colIndexes.acColumn];  // AC列から日付を取得
   } else {
     return; // カテゴリーに該当しない場合はスキップ
   }
@@ -82,7 +101,7 @@ psaxRemovalData.forEach(row => {
   if (!uniqueCombinations[category].has(combinationKey)) {
     uniqueCombinations[category].add(combinationKey);
 
-    if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{2}$/)) {
+    if (typeof rawDate === 'string' && (rawDate.match(/^\d{4}\/\d{2}$/) || rawDate.match(/^\d{4}\/\d{2}\/\d{2}$/))) {
       const formattedDate = formatDate(rawDate);
       if (formattedDate in monthCounts[category]) {
         monthCounts[category][formattedDate]++;
@@ -108,7 +127,9 @@ function writeResults(targetRow, counts) {
 const patterns = [
   { name: 'PSAX', counts: monthCounts.completed },
   { name: 'PSAX単月N件予定', counts: monthCounts.planned },
-  { name: 'PSAX単月仮予定', counts: monthCounts.tentative }
+  { name: 'PSAX単月仮予定', counts: monthCounts.tentative },
+  { name: 'PSAX単月撤去自前申請', counts: monthCounts.selfApplied },
+  { name: 'PSAX単月撤去可能ビル', counts: monthCounts.possibleRemoval }
 ];
 
 patterns.forEach(pattern => {
@@ -132,7 +153,7 @@ console.log("ログメッセージ:");
 logMessages.forEach(msg => console.log(msg));
 
 console.log("月別カウント結果:");
-['completed', 'planned', 'tentative'].forEach(type => {
+['completed', 'planned', 'tentative', 'selfApplied', 'possibleRemoval'].forEach(type => {
   console.log(`${type}:`);
   Object.entries(monthCounts[type]).forEach(([month, count]) => {
     console.log(`  ${month}: ${count}件`);
