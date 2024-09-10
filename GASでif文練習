@@ -31,31 +31,26 @@ function inputpivot() {
   const dateColumns = {};
   for (let i = 6; i <= 17; i++) {
     if (dateRow[i]) {
-      const dateString = dateRow[i];
-      const formattedDateString = formatDate(dateString);
-      dateColumns[formattedDateString] = i;
-      monthCounts.completed[formattedDateString] = 0;
-      monthCounts.planned[formattedDateString] = 0;
-      monthCounts.tentative[formattedDateString] = 0;
-      monthCounts.selfApplied[formattedDateString] = 0;
-      monthCounts.possibleRemoval[formattedDateString] = 0;
+      const dateString = formatDate(dateRow[i]);
+      dateColumns[dateString] = i;
+      monthCounts.completed[dateString] = 0;
+      monthCounts.planned[dateString] = 0;
+      monthCounts.tentative[dateString] = 0;
+      monthCounts.selfApplied[dateString] = 0;
+      monthCounts.possibleRemoval[dateString] = 0;
     }
   }
 
   function formatDate(dateValue) {
     if (dateValue instanceof Date) {
-      // Date型の場合
-      const year = dateValue.getFullYear().toString().slice(-2);
-      const month = (dateValue.getMonth() + 1).toString().padStart(2, '0');
-      return `${year}/${month}`;
+      // Date型の場合、文字列に変換
+      return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yy/MM');
     } else if (typeof dateValue === 'string') {
-      // 文字列の場合（既存の処理）
+      // 文字列の場合
       const parts = dateValue.split('/');
       if (parts.length === 3) {
         // yyyy/mm/dd または yyyy/m/dd の形式の場合
-        const year = parts[0].slice(-2);
-        const month = parts[1].padStart(2, '0');
-        return `${year}/${month}`;
+        return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
       } else if (parts.length === 2) {
         // yyyy/mm の形式の場合
         return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
@@ -112,16 +107,12 @@ function inputpivot() {
     if (!uniqueCombinations[category].has(combinationKey)) {
       uniqueCombinations[category].add(combinationKey);
 
-      if (rawDate instanceof Date || typeof rawDate === 'string') {
-        const formattedDate = formatDate(rawDate);
-        if (formattedDate && formattedDate.match(/^\d{2}\/\d{2}$/)) {
-          if (formattedDate in monthCounts[category]) {
-            monthCounts[category][formattedDate]++;
-          } else {
-            console.log(`警告: ${formattedDate} は有効な月のリストにございません。`);
-          }
+      const formattedDate = formatDate(rawDate);
+      if (formattedDate) {
+        if (formattedDate in monthCounts[category]) {
+          monthCounts[category][formattedDate]++;
         } else {
-          console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。フォーマット後: ${formattedDate}`);
+          console.log(`警告: ${formattedDate} は有効な月のリストにございません。`);
         }
       } else {
         console.log(`警告: 無効な日付値 "${rawDate}" が見つかりました。タイプ: ${typeof rawDate}`);
