@@ -20,7 +20,35 @@ function inputpivot() {
     completed: {},
     planned: {},
     tentative: {},
-    selfApplied: {},
+    selfApplied: {},function formatDate(dateString) {
+  const parts = dateString.split('/');
+  if (parts.length === 3) {
+    // yyyy/mm/dd または yyyy/m/dd の形式の場合
+    const year = parts[0].slice(-2); // 下2桁を取得
+    const month = parts[1].padStart(2, '0'); // 1桁の月を2桁に
+    return `${year}/${month}`;
+  } else if (parts.length === 2) {
+    // 既存の yyyy/mm の処理
+    return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
+  }
+  return dateString; // その他の形式の場合はそのまま返す
+}
+
+// psaxRemovalData.forEach の中の該当部分を修正
+if (typeof rawDate === 'string') {
+  const formattedDate = formatDate(rawDate);
+  if (formattedDate.match(/^\d{2}\/\d{2}$/)) {
+    if (formattedDate in monthCounts[category]) {
+      monthCounts[category][formattedDate]++;
+    } else {
+      console.log(`警告: ${formattedDate} は有効な月のリストにございません。`);
+    }
+  } else {
+    console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。フォーマット後: ${formattedDate}`);
+  }
+} else {
+  console.log(`警告: 無効な日付値 "${rawDate}" が見つかりました。`);
+}
     possibleRemoval: {}
   };
   let logMessages = [];
