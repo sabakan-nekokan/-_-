@@ -46,9 +46,17 @@ function formatDate(dateString) {
   const parts = dateString.split('/');
   if (parts.length === 2) {
     return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
-  } else if (parts.length === 3) {
-    // yyyy/mm/dd 形式の日付を処理
-    return parts[0].slice(-2) + '/' + parts[1].padStart(2, '0');
+  }
+  return dateString;
+}
+
+// 新しい日付フォーマット関数（yyyy/mm/dd形式に対応）
+function formatFullDate(dateString) {
+  const parts = dateString.split('/');
+  if (parts.length === 3) {
+    const year = parts[0].slice(-2);
+    const month = parts[1].padStart(2, '0');
+    return `${year}/${month}`;
   }
   return dateString;
 }
@@ -101,15 +109,29 @@ psaxRemovalData.forEach(row => {
   if (!uniqueCombinations[category].has(combinationKey)) {
     uniqueCombinations[category].add(combinationKey);
 
-    if (typeof rawDate === 'string' && (rawDate.match(/^\d{4}\/\d{2}$/) || rawDate.match(/^\d{4}\/\d{2}\/\d{2}$/))) {
-      const formattedDate = formatDate(rawDate);
-      if (formattedDate in monthCounts[category]) {
-        monthCounts[category][formattedDate]++;
+    let formattedDate;
+    if (category === 'possibleRemoval') {
+      // AC列の日付形式（yyyy/mm/dd）に対応
+      if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{1,2}\/\d{1,2}$/)) {
+        formattedDate = formatFullDate(rawDate);
       } else {
-        console.log(`警告: ${formattedDate} は有効な月のリストに含まれていません。`);
+        console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。`);
+        return;
       }
     } else {
-      console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。`);
+      // BW列の日付形式（yyyy/mm）に対応
+      if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{2}$/)) {
+        formattedDate = formatDate(rawDate);
+      } else {
+        console.log(`警告: 無効な日付形式 "${rawDate}" が見つかりました。`);
+        return;
+      }
+    }
+
+    if (formattedDate in monthCounts[category]) {
+      monthCounts[category][formattedDate]++;
+    } else {
+      console.log(`警告: ${formattedDate} は有効な月のリストに含まれていません。`);
     }
   }
 });
