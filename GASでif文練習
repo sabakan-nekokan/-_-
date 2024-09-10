@@ -1,31 +1,45 @@
-function writeResultsToSheet(targetData, results, targetSheet) {
-  const patterns = [
-    { suffix: '単月N検完了', key: 'completed' },
-    { suffix: '単月N検予定', key: 'planned' },
-    { suffix: '単月仮予定', key: 'tentative' },
-    { suffix: '単月撤去自前申請', key: 'selfApplied' },
-    { suffix: '単月撤去可能ビル', key: 'possibleRemoval' }
-  ];
+function logResults(results) {
+  console.log("\n=== 処理結果のサマリー ===\n");
+
+  const categoryNames = {
+    possibleRemoval: '撤去可能ビル',
+    selfApplied: '撤去自前申請',
+    completed: 'N検完了',
+    planned: 'N検予定',
+    tentative: '仮予定'
+  };
+
+  const categoryOrder = ['possibleRemoval', 'selfApplied', 'completed', 'planned', 'tentative'];
 
   Object.entries(results).forEach(([removalType, data]) => {
-    patterns.forEach(pattern => {
-      let rowPrefix;
-      if (removalType === 'MURS撤去') {
-        rowPrefix = 'MU-RS';
-      } else {
-        rowPrefix = removalType.split('撤去')[0];
-      }
-      const rowName = `${rowPrefix}${pattern.suffix}`;
-      const targetRow = targetData.findIndex(row => row[4] === rowName) + 1;
-      if (targetRow === 0) {
-        console.log(`エラー: targetSheetに列名"${rowName}"の行が見つかりませんでした。`);
-      } else {
-        Object.entries(data.monthCounts[pattern.key]).forEach(([dateString, count]) => {
-          const col = data.dateColumns[dateString] + 1;
-          targetSheet.getRange(targetRow, col).setValue(count);
+    const displayType = removalType === 'MURS撤去' ? 'MU-RS撤去' : removalType;
+    console.log(`\n${displayType}の結果:`);
+
+    console.log("\n1. 月別カウント結果:");
+    categoryOrder.forEach(category => {
+      const counts = data.monthCounts[category];
+      console.log(`\n  ${categoryNames[category]}:`);
+      Object.entries(counts)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([month, count]) => {
+          console.log(`    ${month}: ${count}件`);
         });
-        console.log(`${rowName}のカウント結果をtargetSheetに入力しました。`);
-      }
     });
+
+    console.log("\n2. 全体の処理行数:", data.totalProcessed);
+
+    console.log("\n3. カテゴリー別ユニークな組み合わせ数:");
+    categoryOrder.forEach(category => {
+      console.log(`  ${categoryNames[category]}: ${data.uniqueCombinations[category].size}`);
+    });
+
+    if (data.logMessages.length > 0) {
+      console.log("\n4. 警告・情報メッセージ:");
+      data.logMessages.forEach((msg, index) => {
+        console.log(`  ${index + 1}. ${msg}`);
+      });
+    }
   });
+
+  console.log("\n=== 処理完了 ===");
 }
