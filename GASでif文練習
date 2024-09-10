@@ -58,7 +58,7 @@ console.log(`PSAX撤去かつN件完了でフィルターをかけた結果：${
 // 重複チェック用のSetを作成
 const uniqueCombinations = new Set();
 
-// 撤去予定月の処理とカウント（重複除外）
+// 撤去予定月の処理とカウント（初出のみカウント）
 psaxRemovalCompletedData.forEach(row => {
   const hColumnValue = row[colIndexes.hColumn];
   const baColumnValue = row[colIndexes.baColumn];
@@ -84,12 +84,12 @@ psaxRemovalCompletedData.forEach(row => {
 });
 
 // 結果の出力
-console.log("月別カウント結果（重複除外）:");
+console.log("月別カウント結果（初出のみカウント）:");
 Object.entries(monthCounts).forEach(([month, count]) => {
   console.log(`${month}: ${count}件`);
 });
 
 console.log(`全体の行数: ${psaxRemovalCompletedData.length}`);
-console.log(`重複を除いた行数: ${uniqueCombinations.size}`);
+console.log(`ユニークな局社名と撤去_WOID組み合わせ数: ${uniqueCombinations.size}`);
 
 // さらなる処理や結果の出力をここに追加...
