@@ -1,3 +1,47 @@
+function processRemovalType(removalType, sourceData, targetData, colIndexes) {
+  const monthCounts = {
+    completed: {}, planned: {}, tentative: {}, selfApplied: {}, possibleRemoval: {}
+  };
+  const uniqueCombinations = {
+    completed: new Set(), planned: new Set(), tentative: new Set(),
+    selfApplied: new Set(), possibleRemoval: new Set()
+  };
+  const logMessages = [];
+
+  // ターゲットシートの日付行（71行目）を取得し、日付列のインデックスを特定
+  const dateRow = targetData[70];
+  const dateColumns = {};
+  for (let i = 6; i <= 17; i++) {
+    if (dateRow[i]) {
+      const formattedDateString = formatDate(dateRow[i]);
+      dateColumns[formattedDateString] = i;
+      Object.keys(monthCounts).forEach(key => {
+        monthCounts[key][formattedDateString] = 0;
+      });
+    }
+  }
+
+  // 撤去タイプでフィルターをかける処理
+  const removalData = sourceData.filter((row, index) => 
+    index > 5 && row[colIndexes.ankenName2Column] === removalType
+  );
+
+  // データ処理
+  removalData.forEach(row => {
+    const bzColumnValue = row[colIndexes.bzColumn];
+    const category = getCategoryFromBzValue(bzColumnValue);
+    if (!category) return;
+
+    const combinationKey = `${row[colIndexes.hColumn]}_${row[colIndexes.baColumn]}`;
+    uniqueCombinations[category].add(combinationKey);
+
+    const rawDate = category === 'possibleRemoval' ? row[colIndexes.acColumn] : row[colIndexes.bwColumn];
+    processDate(rawDate, category, monthCounts, logMessages);
+  });
+
+  return { monthCounts, uniqueCombinations, logMessages, dateColumns, totalProcessed: removalData.length };
+}
+
 function logResults(results) {
   console.log("\n=== 処理結果のサマリー ===\n");
 
@@ -22,7 +66,9 @@ function logResults(results) {
       Object.entries(counts)
         .sort(([a], [b]) => a.localeCompare(b))
         .forEach(([month, count]) => {
-          console.log(`    ${month}: ${count}件`);
+          if (count > 0) {  // カウントが0より大きい場合のみ表示
+            console.log(`    ${month}: ${count}件`);
+          }
         });
     });
 
@@ -30,7 +76,10 @@ function logResults(results) {
 
     console.log("\n3. カテゴリー別ユニークな組み合わせ数:");
     categoryOrder.forEach(category => {
-      console.log(`  ${categoryNames[category]}: ${data.uniqueCombinations[category].size}`);
+      const count = data.uniqueCombinations[category].size;
+      if (count > 0) {  // カウントが0より大きい場合のみ表示
+        console.log(`  ${categoryNames[category]}: ${count}`);
+      }
     });
 
     if (data.logMessages.length > 0) {
