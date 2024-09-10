@@ -20,7 +20,6 @@ let monthCounts = {
   planned: {},
   tentative: {}
 };
-const combi = {};
 let logMessages = [];
 let invalidDates = [];
 
@@ -53,32 +52,40 @@ const psaxRemovalData = sourceData.filter((row, index) => {
   return row[colIndexes.ankenName2Column] === "PSAX撤去";
 });
 
-// 重複チェック用のSetを作成
-const uniqueCombinations = new Set();
+// 重複チェック用のSetを作成（カテゴリーごと）
+const uniqueCombinations = {
+  completed: new Set(),
+  planned: new Set(),
+  tentative: new Set()
+};
 
-// 撤去予定月の処理とカウント（初出のみカウント）
+// 撤去予定月の処理とカウント（カテゴリーごとに初出のみカウント）
 psaxRemovalData.forEach(row => {
   const hColumnValue = row[colIndexes.hColumn];
   const baColumnValue = row[colIndexes.baColumn];
   const combinationKey = `${hColumnValue}_${baColumnValue}`;
+  const bzColumnValue = row[colIndexes.bzColumn];
+  const rawDate = row[colIndexes.bwColumn];
 
-  // 重複チェック
-  if (!uniqueCombinations.has(combinationKey)) {
-    uniqueCombinations.add(combinationKey);
+  let category;
+  if (bzColumnValue === "N件完了") {
+    category = 'completed';
+  } else if (bzColumnValue === "N件予定") {
+    category = 'planned';
+  } else if (bzColumnValue === "仮予定") {
+    category = 'tentative';
+  } else {
+    return; // カテゴリーに該当しない場合はスキップ
+  }
 
-    const rawDate = row[colIndexes.bwColumn];
+  // カテゴリーごとの重複チェック
+  if (!uniqueCombinations[category].has(combinationKey)) {
+    uniqueCombinations[category].add(combinationKey);
+
     if (typeof rawDate === 'string' && rawDate.match(/^\d{4}\/\d{2}$/)) {
       const formattedDate = formatDate(rawDate);
-      const bzColumnValue = row[colIndexes.bzColumn];
-
-      if (formattedDate in monthCounts.completed) {
-        if (bzColumnValue === "N件完了") {
-          monthCounts.completed[formattedDate]++;
-        } else if (bzColumnValue === "N件予定") {
-          monthCounts.planned[formattedDate]++;
-        } else if (bzColumnValue === "仮予定") {
-          monthCounts.tentative[formattedDate]++;
-        }
+      if (formattedDate in monthCounts[category]) {
+        monthCounts[category][formattedDate]++;
       } else {
         console.log(`警告: ${formattedDate} は有効な月のリストに含まれていません。`);
       }
@@ -133,4 +140,7 @@ console.log("月別カウント結果:");
 });
 
 console.log(`全体の行数: ${psaxRemovalData.length}`);
-console.log(`ユニークな局社名と撤去_WOID組み合わせ数: ${uniqueCombinations.size}`);
+console.log(`カテゴリー別ユニークな局社名と撤去_WOID組み合わせ数:`);
+Object.entries(uniqueCombinations).forEach(([category, set]) => {
+  console.log(`  ${category}: ${set.size}`);
+});
