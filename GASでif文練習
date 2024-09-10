@@ -83,7 +83,30 @@ psaxRemovalCompletedData.forEach(row => {
   // 重複の場合はスキップ（何もしない）
 });
 
-// 結果の出力
+// targetSheetのE列が'PSAX'の行を検索
+let targetRow = -1;
+for (let i = 0; i < targetData.length; i++) {
+  if (targetData[i][4] === 'PSAX') {  // E列は0から数えて4番目
+    targetRow = i + 1;  // スプレッドシートの行は1から始まるため
+    break;
+  }
+}
+
+if (targetRow === -1) {
+  console.log("エラー: targetSheetにE列が'PSAX'の行が見つかりませんでした。");
+} else {
+  // カウント結果をtargetSheetに入力
+  for (const [dateString, count] of Object.entries(monthCounts)) {
+    const col = dateColumns[dateString] + 1; // スプレッドシートの列は1から始まるため
+    targetSheet.getRange(targetRow, col).setValue(count);
+    logMessages.push(`入力: ${dateString} (列${col}), 値: ${count}`);
+  }
+  
+  console.log("カウント結果をtargetSheetに入力しました。");
+  console.log("ログメッセージ:");
+  logMessages.forEach(msg => console.log(msg));
+}
+
 console.log("月別カウント結果（初出のみカウント）:");
 Object.entries(monthCounts).forEach(([month, count]) => {
   console.log(`${month}: ${count}件`);
@@ -91,5 +114,3 @@ Object.entries(monthCounts).forEach(([month, count]) => {
 
 console.log(`全体の行数: ${psaxRemovalCompletedData.length}`);
 console.log(`ユニークな局社名と撤去_WOID組み合わせ数: ${uniqueCombinations.size}`);
-
-// さらなる処理や結果の出力をここに追加...
