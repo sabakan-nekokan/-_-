@@ -1,22 +1,20 @@
 function memo() {
-  // スプレッドシートとシートの取得（変更なし）
-  const ss = SpreadsheetApp.openById("1JVnuZWaOSRp6qWXiW0dEYAJFHPkNsoNPNvVhtEvdLVc");
+  // スプレッドシートとシートの取得
+  const ss = SpreadsheetApp.openById("1JVnuZWa0SRp6qWXiW0dEYAJFHPkNsoNPNvVhtEvdLVc");
   const sheetA = ss.getSheetByName("【今月】施確遅延理由");
   const sheetB = ss.getSheetByName("【先月】施確遅延理由");
 
-  // データを一括で取得
   const dataA = sheetA.getDataRange().getValues();
   const dataB = sheetB.getDataRange().getValues();
 
   const headerA = dataA[0];
   const headerB = dataB[0];
 
-  // 列のインデックスを取得（変更なし）
-  const idColumnA = headerA.indexOf("散去ID");
+  const idColumnA = headerA.indexOf("取引ID");
   const confirmColumnA = headerA.indexOf("【前月】\n施工結果\n確認予定日");
   const checkColumnA = headerA.indexOf("遅延チェック");
 
-  const idColumnB = headerB.indexOf("散去ID");
+  const idColumnB = headerB.indexOf("取引ID");
   const confirmColumnB = headerB.indexOf("【前月】\n施工結果\n確認予定日");
 
   if (idColumnA === -1 || confirmColumnA === -1 || checkColumnA === -1 || idColumnB === -1 || confirmColumnB === -1) {
@@ -25,12 +23,12 @@ function memo() {
 
   Logger.log("カラムを取得しました");
 
-  // タイムスタンプの生成（変更なし）
+  // タイムスタンプの生成（1ヶ月前の日付）
   const currentDate = new Date();
   const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', '[yyyy/MM]');
+  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', 'yyyy/MM');
 
-  // 日付を比較する関数（変更なし）
+  // 日付を比較する関数
   function compareDates(date1, date2) {
     if (!(date1 instanceof Date) || !(date2 instanceof Date)) {
       return false;
@@ -44,23 +42,26 @@ function memo() {
     return d instanceof Date && !isNaN(d);
   }
 
-  // 更新するデータを保持する配列
-  const updatesA = [];
+  let debugLog = [];
+  let notesToUpdate = []; // 更新するメモを保存する配列
 
-  // Bシートのデータをオブジェクトにマッピング（高速検索のため）
-  const dataBMap = new Map(dataB.slice(1).map(row => [row[idColumnB], row]));
-
-  // Aシートの各行に対して処理
+  // Aシートの各行に対して処理を実行
   for (let i = 1; i < dataA.length; i++) {
     const idA = dataA[i][idColumnA];
     const confirmA = dataA[i][confirmColumnA];
 
-    // Bシートから対応する行を検索
-    const rowB = dataBMap.get(idA);
+    // Bシートからマッチする
 
-    if (rowB) {
-      const confirmB = rowB[confirmColumnB];
-      const noteB = rowB[confirmColumnB + 1]; // メモ列はconfirmColumnBの隣と仮定
+IDを持つ行を検索
+    const rowB = dataB.findIndex(row => row[idColumnB] === idA);
+
+    if (rowB !== -1) {
+      // マッチする行が見つかった場合の処理
+      const confirmB = dataB[rowB][confirmColumnB];
+      const rangeBConfirm = sheetB.getRange(rowB + 1, confirmColumnB + 1);
+      const noteB = rangeBConfirm.getNote();
+      const rangeA = sheetA.getRange(i + 1, confirmColumnA + 1);
+      const checkRangeA = sheetA.getRange(i + 1, checkColumnA + 1);
 
       let newNote = '';
 
@@ -69,24 +70,30 @@ function memo() {
           newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
         }
       } else if (!isValidDate(new Date(confirmB))) {
-        newNote = `行 ${i + 1}:Bシートの"確認"列の値'${confirmB}'が日付として無効`;
+        debugLog.push(`行 ${i + 1}:Bシートの"確認"列の値'${confirmB}'が日付として無効`);
+        newNote = `${lastMonthTimestamp} ${confirmB}\n${noteB}`;
       } else if (!compareDates(new Date(confirmA), new Date(confirmB))) {
+        // AシートとBシートの "確認" 列の値が異なる場合
         const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
         newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
-      } else if (noteB) {
-        newNote = noteB;
+      } else {
+        // AシートとBシートの "確認" 列の値が同じ場合
+        if (noteB) {
+          // Bシートにメモがある場合のみ、Aシートのメモを更新
+          newNote = noteB;
+        }
       }
 
       if (newNote) {
-        updatesA.push([i + 1, confirmColumnA + 1, newNote]);
+        notesToUpdate.push({range: rangeA, note: newNote});
       }
     }
   }
 
-  // 一括更新
-  if (updatesA.length > 0) {
-    sheetA.getRangeList(updatesA.map(update => `A${update[0]}`)).setValues(updatesA.map(update => [update[2]]));
-  }
+  // まとめてメモを更新
+  notesToUpdate.forEach(item => {
+    item.range.setNote(item.note);
+  });
 
-  Logger.log(`${updatesA.length}行を更新しました`);
+  Logger.log(debugLog.join('\n'));
 }
