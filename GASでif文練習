@@ -1,15 +1,17 @@
 function memo() {
-  const ss = SpreadsheetApp.openById("1JVnuZWa0SRp6qWXiW0dEYAJFHPkNsoNPNvVhtEvdLVc");
+  // スプレッドシートとシートの取得（変更なし）
+  const ss = SpreadsheetApp.openById("1JVnuZWaOSRp6qWXiW0dEYAJFHPkNsoNPNvVhtEvdLVc");
   const sheetA = ss.getSheetByName("【今月】施確遅延理由");
   const sheetB = ss.getSheetByName("【先月】施確遅延理由");
 
-  // Get all data at once
+  // データを一括で取得
   const dataA = sheetA.getDataRange().getValues();
   const dataB = sheetB.getDataRange().getValues();
 
   const headerA = dataA[0];
   const headerB = dataB[0];
 
+  // 列のインデックスを取得（変更なし）
   const idColumnA = headerA.indexOf("散去ID");
   const confirmColumnA = headerA.indexOf("【前月】\n施工結果\n確認予定日");
   const checkColumnA = headerA.indexOf("遅延チェック");
@@ -21,32 +23,53 @@ function memo() {
     throw new Error("必要なカラムが見つかりませんでした");
   }
 
-  // Create a map of B sheet data for faster lookup
-  const dataBMap = new Map(dataB.slice(1).map(row => [row[idColumnB], row]));
+  Logger.log("カラムを取得しました");
 
+  // タイムスタンプの生成（変更なし）
   const currentDate = new Date();
   const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', 'yyyy/MM');
+  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', '[yyyy/MM]');
 
-  const updates = [];
+  // 日付を比較する関数（変更なし）
+  function compareDates(date1, date2) {
+    if (!(date1 instanceof Date) || !(date2 instanceof Date)) {
+      return false;
+    }
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
+  }
 
-  // Process data
+  function isValidDate(d) {
+    return d instanceof Date && !isNaN(d);
+  }
+
+  // 更新するデータを保持する配列
+  const updatesA = [];
+
+  // Bシートのデータをオブジェクトにマッピング（高速検索のため）
+  const dataBMap = new Map(dataB.slice(1).map(row => [row[idColumnB], row]));
+
+  // Aシートの各行に対して処理
   for (let i = 1; i < dataA.length; i++) {
     const idA = dataA[i][idColumnA];
     const confirmA = dataA[i][confirmColumnA];
 
+    // Bシートから対応する行を検索
     const rowB = dataBMap.get(idA);
+
     if (rowB) {
       const confirmB = rowB[confirmColumnB];
-      const noteB = sheetB.getRange(dataB.indexOf(rowB) + 1, confirmColumnB + 1).getNote();
+      const noteB = rowB[confirmColumnB + 1]; // メモ列はconfirmColumnBの隣と仮定
 
       let newNote = '';
+
       if (confirmB === '') {
         if (noteB !== '') {
           newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
         }
       } else if (!isValidDate(new Date(confirmB))) {
-        newNote = `${lastMonthTimestamp} ${confirmB}\n${noteB}`;
+        newNote = `行 ${i + 1}:Bシートの"確認"列の値'${confirmB}'が日付として無効`;
       } else if (!compareDates(new Date(confirmA), new Date(confirmB))) {
         const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
         newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
@@ -55,30 +78,15 @@ function memo() {
       }
 
       if (newNote) {
-        updates.push([i + 1, confirmColumnA + 1, newNote]);
+        updatesA.push([i + 1, confirmColumnA + 1, newNote]);
       }
     }
   }
 
-  // Batch update
-  if (updates.length > 0) {
-    updates.forEach(([row, col, note]) => {
-      sheetA.getRange(row, col).setNote(note);
-    });
+  // 一括更新
+  if (updatesA.length > 0) {
+    sheetA.getRangeList(updatesA.map(update => `A${update[0]}`)).setValues(updatesA.map(update => [update[2]]));
   }
 
-  Logger.log("処理が完了しました");
-}
-
-function compareDates(date1, date2) {
-  if (!(date1 instanceof Date) || !(date2 instanceof Date)) {
-    return false;
-  }
-  return date1.getFullYear() === date2.getFullYear() &&
-         date1.getMonth() === date2.getMonth() &&
-         date1.getDate() === date2.getDate();
-}
-
-function isValidDate(d) {
-  return d instanceof Date && !isNaN(d);
+  Logger.log(`${updatesA.length}行を更新しました`);
 }
