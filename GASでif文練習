@@ -1,94 +1,84 @@
-function processRemovalType(removalType, sourceData, targetData, colIndexes) {
-  const monthCounts = {
-    completed: {}, planned: {}, tentative: {}, selfApplied: {}, possibleRemoval: {}
-  };
-  const uniqueCombinations = {
-    completed: new Set(), planned: new Set(), tentative: new Set(),
-    selfApplied: new Set(), possibleRemoval: new Set()
-  };
-  const logMessages = [];
+function memo() {
+  const ss = SpreadsheetApp.openById("1JVnuZWa0SRp6qWXiW0dEYAJFHPkNsoNPNvVhtEvdLVc");
+  const sheetA = ss.getSheetByName("【今月】施確遅延理由");
+  const sheetB = ss.getSheetByName("【先月】施確遅延理由");
 
-  // ターゲットシートの日付行（71行目）を取得し、日付列のインデックスを特定
-  const dateRow = targetData[70];
-  const dateColumns = {};
-  for (let i = 6; i <= 17; i++) {
-    if (dateRow[i]) {
-      const formattedDateString = formatDate(dateRow[i]);
-      dateColumns[formattedDateString] = i;
-      Object.keys(monthCounts).forEach(key => {
-        monthCounts[key][formattedDateString] = 0;
-      });
+  // Get all data at once
+  const dataA = sheetA.getDataRange().getValues();
+  const dataB = sheetB.getDataRange().getValues();
+
+  const headerA = dataA[0];
+  const headerB = dataB[0];
+
+  const idColumnA = headerA.indexOf("散去ID");
+  const confirmColumnA = headerA.indexOf("【前月】\n施工結果\n確認予定日");
+  const checkColumnA = headerA.indexOf("遅延チェック");
+
+  const idColumnB = headerB.indexOf("散去ID");
+  const confirmColumnB = headerB.indexOf("【前月】\n施工結果\n確認予定日");
+
+  if (idColumnA === -1 || confirmColumnA === -1 || checkColumnA === -1 || idColumnB === -1 || confirmColumnB === -1) {
+    throw new Error("必要なカラムが見つかりませんでした");
+  }
+
+  // Create a map of B sheet data for faster lookup
+  const dataBMap = new Map(dataB.slice(1).map(row => [row[idColumnB], row]));
+
+  const currentDate = new Date();
+  const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+  const lastMonthTimestamp = Utilities.formatDate(lastMonth, 'Asia/Tokyo', 'yyyy/MM');
+
+  const updates = [];
+
+  // Process data
+  for (let i = 1; i < dataA.length; i++) {
+    const idA = dataA[i][idColumnA];
+    const confirmA = dataA[i][confirmColumnA];
+
+    const rowB = dataBMap.get(idA);
+    if (rowB) {
+      const confirmB = rowB[confirmColumnB];
+      const noteB = sheetB.getRange(dataB.indexOf(rowB) + 1, confirmColumnB + 1).getNote();
+
+      let newNote = '';
+      if (confirmB === '') {
+        if (noteB !== '') {
+          newNote = `${lastMonthTimestamp} 値なし\n${noteB}`;
+        }
+      } else if (!isValidDate(new Date(confirmB))) {
+        newNote = `${lastMonthTimestamp} ${confirmB}\n${noteB}`;
+      } else if (!compareDates(new Date(confirmA), new Date(confirmB))) {
+        const formattedConfirmB = Utilities.formatDate(new Date(confirmB), 'Asia/Tokyo', 'yyyy/MM/dd');
+        newNote = `${lastMonthTimestamp} ${formattedConfirmB}\n${noteB}`;
+      } else if (noteB) {
+        newNote = noteB;
+      }
+
+      if (newNote) {
+        updates.push([i + 1, confirmColumnA + 1, newNote]);
+      }
     }
   }
 
-  // 撤去タイプでフィルターをかける処理
-  const removalData = sourceData.filter((row, index) => 
-    index > 5 && row[colIndexes.ankenName2Column] === removalType
-  );
+  // Batch update
+  if (updates.length > 0) {
+    updates.forEach(([row, col, note]) => {
+      sheetA.getRange(row, col).setNote(note);
+    });
+  }
 
-  // データ処理
-  removalData.forEach(row => {
-    const bzColumnValue = row[colIndexes.bzColumn];
-    const category = getCategoryFromBzValue(bzColumnValue);
-    if (!category) return;
-
-    const combinationKey = `${row[colIndexes.hColumn]}_${row[colIndexes.baColumn]}`;
-    uniqueCombinations[category].add(combinationKey);
-
-    const rawDate = category === 'possibleRemoval' ? row[colIndexes.acColumn] : row[colIndexes.bwColumn];
-    processDate(rawDate, category, monthCounts, logMessages);
-  });
-
-  return { monthCounts, uniqueCombinations, logMessages, dateColumns, totalProcessed: removalData.length };
+  Logger.log("処理が完了しました");
 }
 
-function logResults(results) {
-  console.log("\n=== 処理結果のサマリー ===\n");
+function compareDates(date1, date2) {
+  if (!(date1 instanceof Date) || !(date2 instanceof Date)) {
+    return false;
+  }
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
+}
 
-  const categoryNames = {
-    possibleRemoval: '撤去可能ビル',
-    selfApplied: '撤去自前申請',
-    completed: 'N検完了',
-    planned: 'N検予定',
-    tentative: '仮予定'
-  };
-
-  const categoryOrder = ['possibleRemoval', 'selfApplied', 'completed', 'planned', 'tentative'];
-
-  Object.entries(results).forEach(([removalType, data]) => {
-    const displayType = removalType === 'MURS撤去' ? 'MU-RS撤去' : removalType;
-    console.log(`\n${displayType}の結果:`);
-
-    console.log("\n1. 月別カウント結果:");
-    categoryOrder.forEach(category => {
-      const counts = data.monthCounts[category];
-      console.log(`\n  ${categoryNames[category]}:`);
-      Object.entries(counts)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .forEach(([month, count]) => {
-          if (count > 0) {  // カウントが0より大きい場合のみ表示
-            console.log(`    ${month}: ${count}件`);
-          }
-        });
-    });
-
-    console.log("\n2. 全体の処理行数:", data.totalProcessed);
-
-    console.log("\n3. カテゴリー別ユニークな組み合わせ数:");
-    categoryOrder.forEach(category => {
-      const count = data.uniqueCombinations[category].size;
-      if (count > 0) {  // カウントが0より大きい場合のみ表示
-        console.log(`  ${categoryNames[category]}: ${count}`);
-      }
-    });
-
-    if (data.logMessages.length > 0) {
-      console.log("\n4. 警告・情報メッセージ:");
-      data.logMessages.forEach((msg, index) => {
-        console.log(`  ${index + 1}. ${msg}`);
-      });
-    }
-  });
-
-  console.log("\n=== 処理完了 ===");
+function isValidDate(d) {
+  return d instanceof Date && !isNaN(d);
 }
