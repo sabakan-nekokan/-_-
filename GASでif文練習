@@ -1,23 +1,60 @@
+function getCharWidth(char) {
+  return char.match(/[^\x00-\xff]/g) ? 2 : 1;
+}
+
+function padRightWidth(str, width) {
+  let currentWidth = 0;
+  for (let i = 0; i < str.length; i++) {
+    currentWidth += getCharWidth(str[i]);
+  }
+  return str + ' '.repeat(Math.max(0, width - currentWidth));
+}
+
+function padLeftWidth(str, width) {
+  let currentWidth = 0;
+  for (let i = 0; i < str.length; i++) {
+    currentWidth += getCharWidth(str[i]);
+  }
+  return ' '.repeat(Math.max(0, width - currentWidth)) + str;
+}
+
 function createEmailBody() {
-  let htmlBody = `
-    <table style="font-family: monospace; white-space: pre;">
-      <tr>
-        <th style="text-align: left; padding-right: 10px;">文書管理番号</th>
-        <th style="text-align: left; padding-right: 10px;">作成者</th>
-        <th style="text-align: left;">周知メール回数</th>
-      </tr>`;
+  let body = "担当者各位\n";
+  body += "お疲れ様です。\n\n";
+  body += "下記文書管理番号において入力漏れがあります。\n";
+  body += "内容をご確認のうえ必要項目の入力をお願いします。\n";
+  body += "未送付の文書については送付後速やかに必要項目の入力をお願いします。\n\n";
+  
+  body += "■文書管理番号    作成者        周知メール回数\n";
 
   for (let i = 0; i < controlNumbersArray.length; i++) {
     if (controlNumbersArray[i]) {
-      htmlBody += `
-        <tr>
-          <td style="padding-right: 10px;">${controlNumbersArray[i]}</td>
-          <td style="padding-right: 10px;">${creatorsArray[i]}</td>
-          <td>${mailCountsArray[i]}回目</td>
-        </tr>`;
+      let controlNumber = padRightWidth(controlNumbersArray[i], 16);
+      let creator = padRightWidth(creatorsArray[i], 12);
+      let mailCount = padLeftWidth(mailCountsArray[i] + '回目', 6);
+      body += `${controlNumber}${creator}${mailCount}\n`;
     }
   }
 
-  htmlBody += '</table>';
-  return htmlBody;
+  // 残りの部分は以前と同じ
+  body += "\n■文書管理マスター\n";
+  body += "https://docs.google.com/spreadsheets/d/1-1zPeBQ68kQ_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0\n\n";
+  // ... (以下省略)
+
+  return body;
+}
+
+function sendEmail() {
+  let body = createEmailBody();
+  let subject = "【棚卸結果共有&是正のお願い】 文書管理マスター_" + Utilities.formatDate(new Date(), "JST", "yyyy/MM/dd");
+  
+  GmailApp.sendEmail(
+    "recipient@example.com",
+    subject,
+    body,
+    {
+      name: 'Automated System',
+      htmlBody: body.replace(/\n/g, '<br>')
+    }
+  );
 }
