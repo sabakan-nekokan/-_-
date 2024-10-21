@@ -1,8 +1,125 @@
-BK.push([
-  (data_tt[j][56] || '').toString().match(/\d{4}\/\d{2}\/\d{2}/) 
-  ? data_tt[j][56].toString().match(/\d{4}\/\d{2}\/\d{2}/)[0]
-  : ''
-]);
+function CheckMail() {
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet_check = ss.getSheetByName("棚卸しログ");
+  let sheet_appList = ss.getSheetByName("承認者リスト (テスト用)");
+  
+  let data_check = sheet_check.getDataRange().getValues();
+  let data_appList = sheet_appList.getDataRange().getValues();
+  let data_targetList = [];
+  
+  let index_kamei = 0;
+  let flag_kamei = false;
+  
+  // 既存のコードをそのまま維持
+  for( i = 0 ; i < data_appList.length ; i++){
+    // 棚卸しログの承認者欄をアドレスに変換する
+    for( j = 0 ; j < data_check.length ; j++){
+      if(data_appList[i][0] != ""){
+        if(data_appList[i][0] == data_check[j][CHECK_APV]){
+          data_check[j][CHECK_APV] = data_appList[i][2]
+        }
+      }
+    }
+    
+    // 承認者リストから課名リストをまとめて取得する
+    if(flag_kamei == true){
+      if(data_appList[i][0] != ""){
+        data_targetList.push([data_appList[i][0] , data_appList[i][1] , "" , "" , "" , ""]);
+      }else{
+        break;
+      }
+    }
+    // 課名のタイトル名が検出出来たらフラグを立てる
+    if(data_appList[i][0] == "課名"){
+      flag_kamei = true;
+    }
+  }
 
-// 追加された文字列のログ
-console.log(`BK に追加: ${BK[BK.length - 1]}`);
+  // 新しい処理：管理番号ごとの作成者とメール送付回数を取得
+  let controlNumbers = [];
+  let creators = [];
+  let mailCounts = [];
+  
+  for (let i = 1; i < data_check.length; i++) { // ヘッダーを飛ばすため1から開始
+    if (data_check[i][CHECK_CHK] !== "") { // チェック項目が空でない場合
+      let controlNumber = data_check[i][CHECK_NNM];
+      let creator = data_check[i][CHECK_MAK];
+      
+      let index = controlNumbers.indexOf(controlNumber);
+      if (index === -1) {
+        controlNumbers.push(controlNumber);
+        creators.push(creator);
+        mailCounts.push(1);
+      } else {
+        mailCounts[index]++;
+      }
+    }
+  }
+
+  // 既存のコードを維持しながら、新しいパラメータを追加
+  for( i = 0 ; i < data_check.length ; i++){
+    // ... (既存のコード)
+    
+    for( j = 0 ; j < data_targetList.length ; j++){
+      // ... (既存のコード)
+      
+      if(data_targetList[j][0] == targetDivusion){
+        // 管理番号挿入
+        data_targetList[j][2] += data_check[i][CHECK_NNM] + "\n"
+        
+        // 作成者挿入
+        if(String(data_targetList[j][3]).indexOf(data_check[i][CHECK_MAK]) == -1){
+          data_targetList[j][3] += data_check[i][CHECK_MAK] + "様\n";
+        }
+        
+        // 新しい処理：メール送付回数を挿入
+        let index = controlNumbers.indexOf(data_check[i][CHECK_NNM]);
+        if (index !== -1) {
+          data_targetList[j][5] += mailCounts[index] + "回目\n";
+        }
+      }
+    }
+  }
+
+  // 既存のコードを維持
+  for( var i = 0;i < data_targetList.length; i++) {
+    if(data_targetList[i][2].trim() != "" && data_targetList[i][3].trim() !="") {
+      MakeMail(data_targetList[i][1] , ccAddress,data_targetList[i][0],data_targetList[i][2],data_targetList[i][3],data_targetList[i][5]);
+    }
+  }
+}
+
+function MakeMail(toAddress, ccAddress, targetName, controlNumbers, creators, mailCounts) {
+  // 既存のコードをほぼ維持
+  let recipient = toAddress;
+  let date = new Date();
+  let toDay = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
+  let url = "https://docs.google.com/spreadsheets/d/1-1zPeB068k0_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0";
+  
+  let subject = `【棚卸結果共有&是正のお願い】文書管理マスター_${toDay}`;
+  
+  let body = `${targetName} 御中\n\n`;
+  body += "お疲れ様です。\n\n";
+  body += "下記文書管理番号において入力漏れがあります。\n";
+  body += "内容をご確認のうえ必要項目の入力をお願いします。\n";
+  body += "未送付の文書については送付後速やかに必要項目の入力をお願いします。\n\n";
+  
+  // 新しい処理：表形式で文書管理番号、作成者、周知メール回数を追加
+  body += "■文書管理番号\t作成者\t周知メール回数\n";
+  let controlNumbersArray = controlNumbers.split('\n');
+  let creatorsArray = creators.split('\n');
+  let mailCountsArray = mailCounts.split('\n');
+  for (let i = 0; i < controlNumbersArray.length; i++) {
+    if (controlNumbersArray[i]) {
+      body += `${controlNumbersArray[i]}\t${creatorsArray[i]}\t${mailCountsArray[i]}\n`;
+    }
+  }
+  
+  // 既存のコードを維持
+  body += "\n■文書管理マスター\n";
+  body += url + "\n\n";
+  
+  // ... (残りの既存コード)
+
+  GmailApp.sendEmail(recipient, subject, body, options);
+}
