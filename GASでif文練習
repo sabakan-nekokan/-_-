@@ -1,3 +1,12 @@
+// 定数定義
+var CHECK_DAY = 0;  //日付
+var CHECK_CHK = 1;  //チェック項目
+var CHECK_NNM = 2;  //管理番号
+var CHECK_DIV = 4;  //課名
+var CHECK_MAK = 5;  //作成者
+var CHECK_APV = 6;  //承認者
+var CHECK_CNT = 7;  //メール送付回数
+
 function CheckMail() {
   let ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet_check = ss.getSheetByName("棚卸しログ");
@@ -10,7 +19,6 @@ function CheckMail() {
   let index_kamei = 0;
   let flag_kamei = false;
   
-  // 既存のコードをそのまま維持
   for( i = 0 ; i < data_appList.length ; i++){
     // 棚卸しログの承認者欄をアドレスに変換する
     for( j = 0 ; j < data_check.length ; j++){
@@ -35,13 +43,13 @@ function CheckMail() {
     }
   }
 
-  // 新しい処理：管理番号ごとの作成者とメール送付回数を取得
+  // 管理番号ごとの作成者とメール送付回数を取得
   let controlNumbers = [];
   let creators = [];
   let mailCounts = [];
   
-  for (let i = 1; i < data_check.length; i++) { // ヘッダーを飛ばすため1から開始
-    if (data_check[i][CHECK_CHK] !== "") { // チェック項目が空でない場合
+  for (let i = 1; i < data_check.length; i++) {
+    if (data_check[i][CHECK_CHK] !== "") {
       let controlNumber = data_check[i][CHECK_NNM];
       let creator = data_check[i][CHECK_MAK];
       
@@ -56,70 +64,163 @@ function CheckMail() {
     }
   }
 
-  // 既存のコードを維持しながら、新しいパラメータを追加
   for( i = 0 ; i < data_check.length ; i++){
-    // ... (既存のコード)
-    
-    for( j = 0 ; j < data_targetList.length ; j++){
-      // ... (既存のコード)
-      
-      if(data_targetList[j][0] == targetDivusion){
-        // 管理番号挿入
-        data_targetList[j][2] += data_check[i][CHECK_NNM] + "\n"
-        
-        // 作成者挿入
-        if(String(data_targetList[j][3]).indexOf(data_check[i][CHECK_MAK]) == -1){
-          data_targetList[j][3] += data_check[i][CHECK_MAK] + "様\n";
+    if(data_check[i][CHECK_CHK] != "" && data_check[i][CHECK_DAY] == data_check[i][CHECK_DAY]){
+      for( j = 0 ; j < data_targetList.length ; j++){
+        //NW構築課の棚卸しはGC施工管理課に送付
+        let targetDivusion = data_check[i][CHECK_DIV];
+        if( targetDivusion == "NW構築課"){
+          targetDivusion = "GC施工管理課";
         }
         
-        // 新しい処理：メール送付回数を挿入
-        let index = controlNumbers.indexOf(data_check[i][CHECK_NNM]);
-        if (index !== -1) {
-          data_targetList[j][5] += mailCounts[index] + "回目\n";
+        if(data_targetList[j][0] == targetDivusion){
+          // 管理番号挿入
+          data_targetList[j][2] += data_check[i][CHECK_NNM] + "\n"
+          
+          // 作成者挿入
+          if(String(data_targetList[j][3]).indexOf(data_check[i][CHECK_MAK]) == -1){
+            data_targetList[j][3] += data_check[i][CHECK_MAK] + "様\n";
+          }
+          
+          // 管理番号挿入
+          if(String(data_targetList[j][4]).indexOf(data_check[i][CHECK_APV]) == -1){
+            data_targetList[j][4] += data_check[i][CHECK_APV] + ",";
+          }
+
+          // メール送付回数を挿入
+          let index = controlNumbers.indexOf(data_check[i][CHECK_NNM]);
+          if (index !== -1) {
+            data_targetList[j][5] += mailCounts[index] + "回目\n";
+          }
         }
       }
     }
   }
 
-  // 既存のコードを維持
-  for( var i = 0;i < data_targetList.length; i++) {
-    if(data_targetList[i][2].trim() != "" && data_targetList[i][3].trim() !="") {
-      MakeMail(data_targetList[i][1] , ccAddress,data_targetList[i][0],data_targetList[i][2],data_targetList[i][3],data_targetList[i][5]);
+  // 初期行（"課名"がある行を取得）
+  var columnA = sheet_appList.getRange("A:A").getValues();
+  // console.log(columnA)
+  var startRow = -1;
+  for (var i = 0;i < columnA.length; i++) {
+    if(columnA[i][0].toString().includes("課名")) {
+      startRow = i + 1;
+      break;
     }
+  }
+
+  //承認者リストの送付先に不備が無いかの確認
+  let cnt = 0;
+  for(var row = startRow; row < columnA.length; row++){
+    var valueA = sheet_appList.getRange(row + 1,1).getValue();
+    var valueB = sheet_appList.getRange(row + 1,2).getValue();
+    
+    if (valueA !== "" && valueB !== ""){
+      //棚卸あり、なしの判定
+      if (data_targetList[cnt][2].trim() !== "" && data_targetList[cnt][3].trim() !=="") {
+        MakeMail(data_targetList[cnt][1] , data_appList[8][1],data_targetList[cnt][0],data_targetList[cnt][3] ,data_targetList[cnt][2],data_targetList[cnt][5]);
+      }else{
+        noValueMail(data_targetList[cnt][1] , data_appList[8][1],valueA);
+      }
+    }
+    cnt++;
   }
 }
 
-function MakeMail(toAddress, ccAddress, targetName, controlNumbers, creators, mailCounts) {
-  // 既存のコードをほぼ維持
-  let recipient = toAddress;
+function MakeMail(toAddress , ccAddress , targetName , targetNameLst,controlNumber,mailCount){
+  let recipient = toAddress
   let date = new Date();
   let toDay = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
   let url = "https://docs.google.com/spreadsheets/d/1-1zPeB068k0_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0";
   
-  let subject = `【棚卸結果共有&是正のお願い】文書管理マスター_${toDay}`;
+  let subject = "【棚卸結果共有&是正のお願い】文書管理マスター_" + toDay; // 件名
   
-  let body = `${targetName} 御中\n\n`;
-  body += "お疲れ様です。\n\n";
-  body += "下記文書管理番号において入力漏れがあります。\n";
-  body += "内容をご確認のうえ必要項目の入力をお願いします。\n";
-  body += "未送付の文書については送付後速やかに必要項目の入力をお願いします。\n\n";
-  
-  // 新しい処理：表形式で文書管理番号、作成者、周知メール回数を追加
-  body += "■文書管理番号\t作成者\t周知メール回数\n";
-  let controlNumbersArray = controlNumbers.split('\n');
-  let creatorsArray = creators.split('\n');
-  let mailCountsArray = mailCounts.split('\n');
+  let body = targetName
+  +"担当者各位\n"
+  +"お疲れ様です。\n"
+  +"\n"
+  +"下記文書管理番号において入力漏れがあります。\n"
+  +"内容をご確認のうえ必要項目の入力をお願いします。\n"
+  +"未送付の文書については送付後速やかに必要項目の入力をお願いします。\n"
+  +"\n"
+  +"■文書管理番号\t作成者\t周知メール回数\n";
+
+  // 表形式で文書管理番号、作成者、周知メール回数を追加
+  let controlNumbersArray = controlNumber.split('\n');
+  let creatorsArray = targetNameLst.split('\n');
+  let mailCountsArray = mailCount.split('\n');
   for (let i = 0; i < controlNumbersArray.length; i++) {
     if (controlNumbersArray[i]) {
       body += `${controlNumbersArray[i]}\t${creatorsArray[i]}\t${mailCountsArray[i]}\n`;
     }
   }
-  
-  // 既存のコードを維持
-  body += "\n■文書管理マスター\n";
-  body += url + "\n\n";
-  
-  // ... (残りの既存コード)
 
+  body += "\n"
+  +"■文書管理マスター\n"
+  + url +"\n"
+  +"\n"
+  +"※"+toDay+"時点のデータで集計をしております。\n"
+  +"タイムラグによる行き違いがございますので入力済みの場合はご容赦ください。\n"
+  +"※棚卸対象：ステータスがopenかつ承認日に日付が入力されている案件\n"
+  +"※チェック項目は以下\n"
+  +"分類\n"
+  +"ファイル名\n"
+  +"概要\n"
+  +"資料リンク\n"
+  +"資料リンク開示範囲\n"
+  +"作成者\n"
+  +"承認者\n"
+  +"送付日\n"
+  +"保存期間\n"
+  +"送付先\n"
+  +"\n"
+  +"以上、よろしくお願いいたします。\n"
+
+  let options ={
+    cc: ccAddress,
+    bcc:"",
+    noReply:true,// 返信不要
+    htmlBody:body.replaceAll('\n', '<br>'), //URLをリンク先として埋め込む場合
+    // name: '文書管理マスター'
+    //attachments:files,
+  };
+
+  //下書き作成
+  // GmailApp.createDraft(recipient, subject, body, options);
+  
+  // 送信処理
+  GmailApp.sendEmail(recipient, subject, body, options);
+}
+
+function noValueMail(toAddress , ccAddress,targetDIV){
+  let recipient = toAddress
+  let date = new Date();
+  let toDay = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
+  let url = "https://docs.google.com/spreadsheets/d/1-1zPeB068k0_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0";
+  
+  let subject = "【棚卸結果共有】文書管理マスター_" + toDay; // 件名
+  
+  let body = targetDIV + " 担当者各位\n"
+  +"お疲れ様です。\n"
+  +"\n"
+  + "" + toDay + " 時点での文書管理に関しまして、\n"
+  +"棚卸対象はありませんでした。\n"
+  +"引き続きよろしくお願いいたします。\n"
+  +"\n"
+  +"■文書管理マスター\n"
+  + url +"\n"
+  +"\n"
+  +"※"+toDay+"時点のデータで集計をしております。\n"
+  +"タイムラグによる行き違いがございますのでご入力済みの場合はご容赦ください。\n"
+  +"\n"
+  +"以上、よろしくお願いいたします。\n"
+
+  let options ={
+    cc: ccAddress,
+    bcc:"",
+    noReply:true,// 返信不要
+    htmlBody:body.replaceAll('\n', '<br>'), //URLをリンク先として埋め込む場合
+  };
+  
+  // 送信処理
   GmailApp.sendEmail(recipient, subject, body, options);
 }
