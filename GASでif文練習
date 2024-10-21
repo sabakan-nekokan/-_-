@@ -1,16 +1,52 @@
-function padRight(str, length) {
-  return str + ' '.repeat(Math.max(0, length - str.length));
-}
-
-function padLeft(str, length) {
-  return ' '.repeat(Math.max(0, length - str.length)) + str;
-}
-
-for (let i = 0; i < controlNumbersArray.length; i++) {
-  if (controlNumbersArray[i]) {
-    let controlNumber = padRight(controlNumbersArray[i], 13);
-    let creator = padRight(creatorsArray[i], 10);
-    let mailCount = padLeft(mailCountsArray[i] + '回目', 6);
-    body += `${controlNumber}${creator}${mailCount}\n`;
+function createEmailBody() {
+  function padRight(str, length) {
+    return (str + ' '.repeat(length)).slice(0, length);
   }
+
+  function padLeft(str, length) {
+    return (' '.repeat(length) + str).slice(-length);
+  }
+
+  let body = "担当者各位\n";
+  body += "お疲れ様です。\n\n";
+  body += "下記文書管理番号において入力漏れがあります。\n";
+  body += "内容をご確認のうえ必要項目の入力をお願いします。\n";
+  body += "未送付の文書については送付後速やかに必要項目の入力をお願いします。\n\n";
+  
+  body += "■文書管理番号    作成者        周知メール回数\n";
+
+  for (let i = 0; i < controlNumbersArray.length; i++) {
+    if (controlNumbersArray[i]) {
+      let controlNumber = padRight(controlNumbersArray[i], 16);
+      let creator = padRight(creatorsArray[i], 12);
+      let mailCount = padLeft(mailCountsArray[i] + '回目', 6);
+      body += `${controlNumber}${creator}${mailCount}\n`;
+    }
+  }
+
+  body += "\n■文書管理マスター\n";
+  body += "https://docs.google.com/spreadsheets/d/1-1zPeBQ68kQ_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0\n\n";
+  body += "※2024/10/21時点のデータで集計をしております。\n";
+  body += "タイムラグによる行き違いがございますので入力済みの場合はご容赦ください。\n";
+  body += "※棚卸対象：ステータスがopenかつ承認日に日付が入力されている案件\n";
+  body += "※チェック項目は以下\n";
+  body += "分類\n";
+  body += "ファイル名\n";
+
+  return body;
+}
+
+function sendEmail() {
+  let body = createEmailBody();
+  let subject = "【棚卸結果共有&是正のお願い】 文書管理マスター_" + Utilities.formatDate(new Date(), "JST", "yyyy/MM/dd");
+  
+  GmailApp.sendEmail(
+    "recipient@example.com",
+    subject,
+    body,
+    {
+      name: 'Automated System',
+      htmlBody: body.replace(/\n/g, '<br>')
+    }
+  );
 }
