@@ -1,51 +1,11 @@
-function CheckMail() {
-  // ... (既存のコード)
-
-  // 新しい処理：管理番号ごとの作成者とメール送付回数を取得
-  let controlNumbersMap = new Map();
-
-  for (let i = 1; i < data_check.length; i++) { // ヘッダーを飛ばすため1から開始
-    if (data_check[i][CHECK_CHK] !== "") { // チェック項目が空でない場合
-      let controlNumber = data_check[i][CHECK_NNM];
-      let creator = data_check[i][CHECK_MAK] || "未定義"; // 作成者が未定義の場合のデフォルト値
-      
-      if (!controlNumbersMap.has(controlNumber)) {
-        controlNumbersMap.set(controlNumber, { creator: creator, count: 1 });
-      } else {
-        let entry = controlNumbersMap.get(controlNumber);
-        entry.count++;
-        if (entry.creator === "未定義" && creator !== "未定義") {
-          entry.creator = creator;
-        }
-      }
-    }
-  }
-
-  // Map をソートされた配列に変換
-  let sortedEntries = Array.from(controlNumbersMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-
-  // ... (既存のコード)
-
-  // MakeMail 関数の呼び出しを修正
-  for (let [controlNumber, data] of sortedEntries) {
-    MakeMail(data_targetList[i][1], ccAddress, data_targetList[i][0], controlNumber, data.creator, data.count);
+body += "■文書管理番号    作成者      周知メール回数\n";
+body += "------------------------------------------------\n";
+for (let i = 0; i < controlNumbersArray.length; i++) {
+  if (controlNumbersArray[i]) {
+    let controlNumber = controlNumbersArray[i].padEnd(16);
+    let creator = creatorsArray[i].padEnd(10);
+    let mailCount = mailCountsArray[i].toString().padStart(3) + "回目";
+    body += `${controlNumber}${creator}${mailCount}\n`;
   }
 }
-
-function MakeMail(toAddress, ccAddress, targetName, controlNumber, creator, mailCount) {
-  // ... (既存のコード)
-
-  // メール本文の生成を修正
-  let body = `${targetName} 御中\n\n`;
-  body += "お疲れ様です。\n\n";
-  body += "下記文書管理番号において入力漏れがあります。\n";
-  body += "内容をご確認のうえ必要項目の入力をお願いします。\n";
-  body += "未送付の文書については送付後速やかに必要項目の入力をお願いします。\n\n";
-  
-  body += "■文書管理番号\t作成者\t周知メール回数\n";
-  body += `${controlNumber}\t${creator}\t${mailCount}回目\n`;
-
-  // ... (残りの既存コード)
-
-  GmailApp.sendEmail(recipient, subject, body, options);
-}
+body += "------------------------------------------------\n";
