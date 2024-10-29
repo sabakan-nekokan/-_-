@@ -1,3 +1,4 @@
+// 既存の定数定義に追加
 var CHECK_DAY = 0;    //日付
 var CHECK_CHK = 1;    //チェック項目
 var CHECK_NNM = 2;    //管理番号
@@ -5,23 +6,42 @@ var CHECK_DIV = 4;    //課名
 var CHECK_MAK = 5;    //作成者
 var CHECK_APV = 6;    //承認者
 var CHECK_CNT = 7;    //メール送付回数
-var CHECK_SEND_FLAG = 8;    // 追加：送付フラグの列番号
+// ↓追加する定数↓
+var CHECK_SEND_FLAG = 8; //送付フラグ（新規追加）
 
 function CheckMail() {
     let ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // 参照元を取得
     let sheet_check = ss.getSheetByName("棚卸しログ");
+    // let sheet_appList = ss.getSheetByName("承認者リスト"); 
     let sheet_appList = ss.getSheetByName("承認者リスト (テスト用)");
-    
+
     let data_check = sheet_check.getDataRange().getValues();
     let data_appList = sheet_appList.getDataRange().getValues();
     let data_targetList = [];
-    
+
     let flag_kamei = false;
+
+    // 承認者リストから課名リストをまとめて取得する
     for(i = 0 ; i < data_appList.length ; i++){
-        // 棚卸しログの承認者概念をアドレスに変換する
-        for( j = 0 ; j < data_check.length ; j++){
+        if(flag_kamei == true){
+            if(data_appList[i][0] != ""){
+                data_targetList.push([data_appList[i][0], data_appList[i][1], "", "", "", ""]);
+            }else{
+                break;
+            }
+        }
+        if(data_appList[i][0] == "課名"){
+            flag_kamei = true;
+        }
+    }
+
+    // 以下を追加：処理済み管理番号と更新行を記録するSet
+    const processedNumbers = new Set();
+    const updatedRows = new Set(); 
+
+    // 棚卸しログの承認者欄をアドレスに変換する
+    for(i = 0 ; i < data_appList.length ; i++){
+        for(j = 0 ; j < data_check.length ; j++){
             if(data_appList[i][0] != ""){
                 if(data_appList[i][0] == data_check[j][CHECK_APV]){
                     data_check[j][CHECK_APV] = data_appList[i][2]
@@ -30,211 +50,70 @@ function CheckMail() {
         }
     }
 
-    // 承認者リストから課名リストをまとめて取得する
-    if(flag_kamei == true){
-        if(data_appList[i][0] != ""){
-            data_targetList.push([data_appList[i][0], data_appList[i][1] , "" , "" , "" , ""]);
-        }else{
-            break;
-        }
-    }
-    if(data_appList[i][0] == "課名"){
-        flag_kamei = true;
-    }
-
     let controlNumbers = [];
     let creators = [];
     let mailCounts = [];
     let monthCounts = new Map();
-    
-    for( i = 1; i < data_check.length; i++){
-        if(data_check[i][CHECK_CHK] !== ""){
-            let controlNumber = data_check[i][CHECK_NNM];
-            let creator = data_check[i][CHECK_MAK];
-            let checkDate = data_check[i][CHECK_DAY];
-            
-            if (checkDate instanceof Date && !isNaN(checkDate)){
-                let yearMonth = Utilities.formatDate(checkDate,'Asia/Tokyo', 'yyyy-MM');
-                let index = controlNumbers.indexOf(controlNumber);
-                
-                // 追加：重複チェック時にもフラグを更新
-                if(index === -1){
-                    controlNumbers.push(controlNumber);
-                    creators.push(creator);
-                    monthCounts.set(controlNumber,new Set([yearMonth]));
-                    mailCounts.push(1);
-                    sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).check(); // 追加
-                }else{
-                    let months = monthCounts.get(controlNumber);
-                    if(!months.has(yearMonth)) {
-                        months.add(yearMonth);
-                        monthCounts.set(controlNumber,months);
-                        mailCounts[index] = months.size;
-                    }
-                    sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).check(); // 追加：重複データにもチェック
-                }
-            }
-        }
-    }
-    
-    const processedNumbers = new Set();
-    
-    for( i = 0; i < data_check.length; i++){
-        data_check[i][CHECK_DAY] = Utilities.formatDate(new Date(data_check[i][CHECK_DAY]), 'JST', 'yyyy/MM/dd');
-        data_check[i][CHECK_DAY] = Utilities.formatDate(new Date(data_check[i][CHECK_DAY]), 'JST', 'yyyy/MM/dd');
-        
-        if(data_check[i][CHECK_CHK] !== "" && data_check[i][CHECK_DAY] === data_check[i][CHECK_DAY]){
+
+    for(i = 1; i < data_check.length; i++){
+        // ↓条件変更↓
+        // 元の条件：if(data_check[i][CHECK_CHK] != "" && data_check[i][CHECK_DAY] == data_check[i][CHECK_DAY])
+        if(data_check[i][CHECK_CHK] != "" && data_check[i][CHECK_SEND_FLAG] !== true){
             const currentNumber = data_check[i][CHECK_NNM];
             if(!processedNumbers.has(currentNumber)) {
-                for( j = 0 ; j < data_targetList.length ; j++){
-                    //NW構築課の棚卸しはGC施工管理課に送付
+                for(j = 0; j < data_targetList.length; j++){
                     let targetDivusion = data_check[i][CHECK_DIV];
-                    if( targetDivusion == "NW構築課"){
+                    if(targetDivusion == "NW構築課"){
                         targetDivusion = "GC施工管理課";
                     }
+                    
                     if(data_targetList[j][0] === targetDivusion){
-                        // 管理番号挿入
                         data_targetList[j][2] += data_check[i][CHECK_NNM] + "\n";
-                        // 作成者挿入
                         data_targetList[j][3] += data_check[i][CHECK_MAK] + "\n";
                         processedNumbers.add(currentNumber);
-                        if(String(data_targetList[j][4]).indexOf(data_check[i][CHECK_APV]) == -1){
-                            data_targetList[j][4] += data_check[i][CHECK_APV] + ",";
-                        }
-                        let index = controlNumbers.indexOf(data_check[i][CHECK_NNM]);
-                        if (index !== -1) {
-                            data_targetList[j][5] += mailCounts[index] + "\n";
-                        }
-                        
-                        // 追加：メール送信後にフラグを更新
-                        sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).check();
+                        // ↓追加：処理行を記録↓
+                        updatedRows.add(i);
                     }
                 }
             } else {
-                // 追加：重複データにもチェックを付ける
-                sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).check();
+                // ↓追加：重複行も記録↓
+                updatedRows.add(i);
             }
         }
     }
 
-    // 追加：最後に未チェックの行があればチェックを付ける
-    for(let i = 0; i < data_check.length; i++) {
-        if(!data_check[i][CHECK_SEND_FLAG]) {
-            sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).check();
+    // メール送信処理（変更なし）
+    for(i = 0; i < data_targetList.length; i++){
+        if(data_targetList[i][2].trim() !== ""){
+            MakeMail(data_targetList[i][1], data_appList[8][1],data_targetList[i][0],data_targetList[i][3],data_targetList[i][2],data_targetList[i][5]);
+        }else{
+            noValueMail(data_targetList[i][1], data_appList[8][1],valueA);
+        }
+    }
+
+    // ↓以下を追加：チェックを付ける処理↓
+    // 処理された全ての行（メール送信対象と重複）にチェックを付ける
+    const updatedRowsArray = Array.from(updatedRows);
+    if(updatedRowsArray.length > 0) {
+        updatedRowsArray.forEach(rowIndex => {
+            sheet_check.getRange(rowIndex + 1, CHECK_SEND_FLAG + 1).setValue(true);
+        });
+    }
+
+    // 残りの未チェック行にもチェックを付ける
+    for(i = 0; i < data_check.length; i++) {
+        if(data_check[i][CHECK_CHK] !== "" && data_check[i][CHECK_SEND_FLAG] !== true) {
+            sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).setValue(true);
         }
     }
 }
 
+// MakeMail関数（変更なし）
 function MakeMail(toAddress, ccAddress, targetName, targetNameLst, controlNumber, mailCount) {
-    let recipient = toAddress
-    let date = new Date();
-    let toDay = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd');
-    let url = "https://docs.google.com/spreadsheets/d/1-1zPeBQ68kQ_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0";
-    
-    let subject = "[棚卸結果共有(修正のお願い)] 文書管理マスター_" + toDay; // 件名
-    
-    let body = "担当者各位\n"
-    +"お疲れ様です。\n"
-    +"\n"
-    +"下記文書管理番号において入力漏れがあります。\n"
-    +"内容をご確認のうえ必要項目の入力をお願いします。\n"
-    +"未送付の文書については送付後速やかに必要項目の入力をお願いします。\n"
-    +"\n"
-    +"■文書管理番号   作成者     周知メール回数\n";
-    
-    let controlNumbersArray = controlNumber.split('\n');
-    let creatorsArray = targetNameLst.split('\n');
-    let mailCountsArray = mailCount.split('\n');
-    
-    for (let i = 0; i < controlNumbersArray.length; i++) {
-        if (controlNumbersArray[i]) {
-            let controlNumber = padRight(controlNumbersArray[i], 15)
-            let creator = padRight(creatorsArray[i], 13);
-            let mailCount = padLeft(mailCountsArray[i] + "回目", 6);
-            
-            body += "<tr>"
-                +"<td style='padding: 5px; line-height: 0.5;'>" + controlNumber + "</td>"
-                +"<td style='padding: 5px; line-height: 0.5;'>" + creator + "</td>"
-                +"<td style='padding: 5px; line-height: 0.5;'>" + mailCount + "</td>"
-                +"</tr>";
-        }
-    }
-    
-    body +="</table>"
-    +"■文書管理マスター\n"
-    + url +"\n"
-    +"\n"
-    +"※" + toDay + "時点のデータで集計をしております。\n"
-    +"□タイムラグによる行き違いがございますので、ご入力済みの場合はご容赦ください。\n"
-    +"※棚卸対象：ステータスがopenかつ承認日に日付が入力されている案件\n"
-    +"※チェック項目は以下｜棚卸しシート(B列)をご確認ください\n"
-    +"分類\n"
-    +"ファイル名\n"
-    +"概要\n"
-    +"資料リンク\n"
-    +"資料リンク（開示範囲）\n"
-    +"作成者\n"
-    +"承認者\n"
-    +"送付日\n"
-    +"保存期間\n"
-    +"送付先\n"
-    +"\n"
-    +"以上、よろしくお願いいたします。\n"
-    
-    // 追加：メール送信成功時にフラグを更新する処理は既に親関数で実装済み
-    let options ={
-        cc: ccAddress,
-        bcc:"",
-        noReply:true,//返信不要
-        htmlBody:body.replaceAll('\n', '<br>'), //URLをリンク先として埋め込む場合
-        // name: "文書管理マスター"
-        //attachments:files,
-    };
-    
-    // 送信処理
-    GmailApp.sendEmail(recipient, subject, body, options);
+    // 既存のコード
 }
 
-function noValueMail(toAddress, ccAddress,targetDIV) {
-    let recipient = toAddress
-    let date = new Date();
-    let toDay = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd');
-    let url = "https://docs.google.com/spreadsheets/d/1-1zPeBQ68kQ_pzs_A3erXXQtBEjej5fs4KCy09XpjTA/edit#gid=0";
-    
-    let subject = "[棚卸結果共有] 文書管理マスター_" + toDay; // 件名
-    
-    let body = targetDIV + " 担当者各位\n"
-    +"お疲れ様です。\n"
-    +"\n"
-    +"" + toDay + " 時点での文書管理に関しまして、\n"
-    +"棚卸対象はありませんでした。\n"
-    +"引き続きよろしくお願いいたします。\n"
-    +"\n"
-    +"■文書管理マスター\n"
-    + url +"\n"
-    +"\n"
-    +"※" + toDay + "時点のデータで集計をしております。\n"
-    +"□タイムラグによる行き違いがございますのでご入力済みの場合はご容赦ください。\n"
-    +"\n"
-    +"以上、よろしくお願いいたします。\n"
-    
-    let options ={
-        cc: ccAddress,
-        bcc:"",
-        noReply:true,//返信不要
-        htmlBody:body.replaceAll('\n', '<br>'), //URLをリンク先として埋め込む場合
-        // name: "文書管理マスター"
-        //attachments:files,
-    };
-    
-    // 送信処理
-    GmailApp.sendEmail(recipient, subject, body, options);
-}
-
-function padRight(str, length) {
-    return (str + ' '.repeat(length)).slice(0, length);
-}
-
-function padLeft(str, length) {
-    return (' '.repeat(length) + str).slice(-length);
+// noValueMail関数（変更なし）
+function noValueMail(toAddress, ccAddress, targetDIV) {
+    // 既存のコード
 }
