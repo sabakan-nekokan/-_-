@@ -1,119 +1,161 @@
-// 既存の定数定義に追加
-var CHECK_DAY = 0;    //日付
-var CHECK_CHK = 1;    //チェック項目
-var CHECK_NNM = 2;    //管理番号
-var CHECK_DIV = 4;    //課名
-var CHECK_MAK = 5;    //作成者
-var CHECK_APV = 6;    //承認者
-var CHECK_CNT = 7;    //メール送付回数
-// ↓追加する定数↓
-var CHECK_SEND_FLAG = 8; //送付フラグ（新規追加）
+// グローバル変数
+// 文書管理マスター
+var MASTER_SUT = 0;    //ステータス
+var MASTER_NNM = 2;    //管理番号
+var MASTER_CLS = 5;    //分類
+var MASTER_FIL = 6;    //ファイル名
+var MASTER_OVV = 7;    //概要
+var MASTER_DCL = 8;    //資料リンク
+var MASTER_DLD = 9;    //資料リンク開示範囲
+var MASTER_DIV = 10;   //課名
+var MASTER_MAK = 11;   //作成者
+var MASTER_APV = 12;   //承認者
+var MASTER_APD = 13;   //承認日付
+var MASTER_SND = 14;   //送付日
+var MASTER_SAV = 16;   //保存期間
+var MASTER_TGT = 19;   //送付先
 
-function CheckMail() {
+// 概要
+// 文書管理マスター内のデータに不備が無いか確認する
+// 主なチェック対象は「棚卸し」シートに記載
+// チェック対象はログへ出力され、作成者へメールで通知される
+// 正社員のみを対象にメール通知 ⇒ 課名単位であれば正社員のみへ通知が発生する
+
+function CheckLog() {
     let ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 参照元を取得
     let sheet_check = ss.getSheetByName("棚卸しログ");
-    // let sheet_appList = ss.getSheetByName("承認者リスト"); 
-    let sheet_appList = ss.getSheetByName("承認者リスト (テスト用)");
+    let sheet_Mastar = ss.getSheetByName("文書管理マスター");
+    let sheet_NotTgt = ss.getSheetByName("対象外リスト");
+    
+    // フィルタ解除
+    let filter = sheet_check.getDataRange().getFilter();
+    filter.remove(); //フィルタを解除
 
-    let data_check = sheet_check.getDataRange().getValues();
-    let data_appList = sheet_appList.getDataRange().getValues();
-    let data_targetList = [];
+    // データ取得
+    let data_Mastar = sheet_Mastar.getDataRange().getValues();
+    // 出力結果
+    let data_Result = [];
+    // ファイル名重複の対象外リスト
+    let data_NotTgt = sheet_NotTgt.getDataRange().getValues();
+    let notTarget = "";
+    
+    let sutatus_Result = "";
+    
+    // ヘッダーカラム
+    let header_Check = 1;
+    let header_Mastar = 5;
 
-    let flag_kamei = false;
+    // タイムスタンプ
+    let date = new Date();
+    date = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd');
 
-    // 承認者リストから課名リストをまとめて取得する
-    for(i = 0 ; i < data_appList.length ; i++){
-        if(flag_kamei == true){
-            if(data_appList[i][0] != ""){
-                data_targetList.push([data_appList[i][0], data_appList[i][1], "", "", "", ""]);
+    // 対象外リストを取得
+    for(i = 1 ; i < data_NotTgt.length ; i++){
+        if(data_NotTgt[0][1] == "対象外"){
+            for(j = 1 ; j < data_NotTgt.length ; j++){
+                notTarget = notTarget + data_NotTgt[j][1] + ",";
+            }
+            break;
+        }
+    }
+    
+    console.log(notTarget)
+
+    for(i = header_Mastar ; i < data_Mastar.length ; i++){
+        sutatus_Result = "";
+        if(data_Mastar[i][MASTER_SUT] == "open" && data_Mastar[i][MASTER_APD] != ""){
+            
+            sutatus_Result = CheckRecipient(i , data_Mastar , sutatus_Result , "ファイル名重複\n", notTarget)
+            sutatus_Result = CheckDuplication(i , data_Mastar , sutatus_Result , "送付先\n")
+            
+            sutatus_Result = CheckSpace(i , MASTER_CLS , data_Mastar , sutatus_Result , "分類\n");
+            sutatus_Result = CheckSpace(i , MASTER_FIL , data_Mastar , sutatus_Result , "ファイル名\n");
+            sutatus_Result = CheckSpace(i , MASTER_OVV , data_Mastar , sutatus_Result , "概要\n");
+            sutatus_Result = CheckSpace(i , MASTER_DCL , data_Mastar , sutatus_Result , "資料リンク\n");
+            sutatus_Result = CheckSpace(i , MASTER_DLD , data_Mastar , sutatus_Result , "資料リンク開示範囲\n");
+            sutatus_Result = CheckSpace(i , MASTER_MAK , data_Mastar , sutatus_Result , "作成者\n");
+            sutatus_Result = CheckSpace(i , MASTER_APV , data_Mastar , sutatus_Result , "承認者\n");
+            sutatus_Result = CheckSpace(i , MASTER_SND , data_Mastar , sutatus_Result , "送付日\n");
+            sutatus_Result = CheckSpace(i , MASTER_SAV , data_Mastar , sutatus_Result , "保存期間\n");
+            
+            // イレギュラーステータスの無い場合※正常な記入
+            if(sutatus_Result != ""){
+                console.log(sutatus_Result)
+            }
+            
+            data_Result.push([ date , 
+                      sutatus_Result , 
+                      data_Mastar[i][MASTER_NNM] , 
+                      data_Mastar[i][MASTER_FIL],
+                      data_Mastar[i][MASTER_DIV],
+                      data_Mastar[i][MASTER_MAK],
+                      data_Mastar[i][MASTER_APV]]);
+        }
+    }
+
+    if(data_Result.length > 0) {
+        // チェックボックスの状態を保存
+        const lastRow = sheet_check.getLastRow();
+        const checkboxValues = sheet_check.getRange(2, 9, lastRow - 1, 1).getValues();
+
+        const testRange = sheet_check.getRange("A2:G" + (data_Result.length + 1));
+        testRange.insertCells(SpreadsheetApp.Dimension.ROWS);
+        sheet_check.getRange(1 + header_Check, 1, data_Result.length, data_Result[0].length).setValues(data_Result);
+
+        // チェックボックスの状態を復元
+        if(lastRow > 1) {
+            sheet_check.getRange(2 + data_Result.length, 9, checkboxValues.length, 1).setValues(checkboxValues);
+        }
+    }
+
+    sheet_check.getDataRange().createFilter();
+}
+
+// 空白チェック
+function CheckSpace(i , targetIdx , data , result , str){
+    if(data[i][targetIdx] == ""){
+        result += str;
+        console.log(data[i][MASTER_NNM])
+    }
+    
+    return result;
+}
+
+// 重複チェック
+function CheckRecipient(t , data , result , str , notTgt){
+    if(String(notTgt).match(data[t][MASTER_NNM]) == null){
+        for(j = 0 ; j < data.length ; j++){
+            if(data[t][MASTER_FIL] != ""){
+                if(data[t][MASTER_FIL] == data[j][MASTER_FIL] && t != j){
+                    
+                    result += str;
+                    break;
+                }
             }else{
+                // ファイル名が空白の場合はチェック対象外
                 break;
             }
         }
-        if(data_appList[i][0] == "課名"){
-            flag_kamei = true;
-        }
     }
-
-    // 以下を追加：処理済み管理番号と更新行を記録するSet
-    const processedNumbers = new Set();
-    const updatedRows = new Set(); 
-
-    // 棚卸しログの承認者欄をアドレスに変換する
-    for(i = 0 ; i < data_appList.length ; i++){
-        for(j = 0 ; j < data_check.length ; j++){
-            if(data_appList[i][0] != ""){
-                if(data_appList[i][0] == data_check[j][CHECK_APV]){
-                    data_check[j][CHECK_APV] = data_appList[i][2]
-                }
-            }
-        }
-    }
-
-    let controlNumbers = [];
-    let creators = [];
-    let mailCounts = [];
-    let monthCounts = new Map();
-
-    for(i = 1; i < data_check.length; i++){
-        // ↓条件変更↓
-        // 元の条件：if(data_check[i][CHECK_CHK] != "" && data_check[i][CHECK_DAY] == data_check[i][CHECK_DAY])
-        if(data_check[i][CHECK_CHK] != "" && data_check[i][CHECK_SEND_FLAG] !== true){
-            const currentNumber = data_check[i][CHECK_NNM];
-            if(!processedNumbers.has(currentNumber)) {
-                for(j = 0; j < data_targetList.length; j++){
-                    let targetDivusion = data_check[i][CHECK_DIV];
-                    if(targetDivusion == "NW構築課"){
-                        targetDivusion = "GC施工管理課";
-                    }
-                    
-                    if(data_targetList[j][0] === targetDivusion){
-                        data_targetList[j][2] += data_check[i][CHECK_NNM] + "\n";
-                        data_targetList[j][3] += data_check[i][CHECK_MAK] + "\n";
-                        processedNumbers.add(currentNumber);
-                        // ↓追加：処理行を記録↓
-                        updatedRows.add(i);
-                    }
-                }
-            } else {
-                // ↓追加：重複行も記録↓
-                updatedRows.add(i);
-            }
-        }
-    }
-
-    // メール送信処理（変更なし）
-    for(i = 0; i < data_targetList.length; i++){
-        if(data_targetList[i][2].trim() !== ""){
-            MakeMail(data_targetList[i][1], data_appList[8][1],data_targetList[i][0],data_targetList[i][3],data_targetList[i][2],data_targetList[i][5]);
-        }else{
-            noValueMail(data_targetList[i][1], data_appList[8][1],valueA);
-        }
-    }
-
-    // ↓以下を追加：チェックを付ける処理↓
-    // 処理された全ての行（メール送信対象と重複）にチェックを付ける
-    const updatedRowsArray = Array.from(updatedRows);
-    if(updatedRowsArray.length > 0) {
-        updatedRowsArray.forEach(rowIndex => {
-            sheet_check.getRange(rowIndex + 1, CHECK_SEND_FLAG + 1).setValue(true);
-        });
-    }
-
-    // 残りの未チェック行にもチェックを付ける
-    for(i = 0; i < data_check.length; i++) {
-        if(data_check[i][CHECK_CHK] !== "" && data_check[i][CHECK_SEND_FLAG] !== true) {
-            sheet_check.getRange(i + 1, CHECK_SEND_FLAG + 1).setValue(true);
-        }
-    }
+    return result;
 }
 
-// MakeMail関数（変更なし）
-function MakeMail(toAddress, ccAddress, targetName, targetNameLst, controlNumber, mailCount) {
-    // 既存のコード
-}
-
-// noValueMail関数（変更なし）
-function noValueMail(toAddress, ccAddress, targetDIV) {
-    // 既存のコード
+// 送付先チェック
+function CheckDuplication(t , data , result , str){
+    let cnt = 0;
+    
+    for(j = MASTER_TGT ; j < data[4].length ; j++){
+        if(data[t][j] != ""){
+            cnt++;
+            break;
+        }
+    }
+    
+    if(cnt == 0){
+        result += str;
+    }
+    
+    return result;
 }
