@@ -1,5 +1,4 @@
-// グローバル変数
-// 文書管理マスター
+// ■グローバル変数（変更なし）
 var MASTER_SUT = 0;    //ステータス
 var MASTER_NNM = 2;    //管理番号
 var MASTER_CLS = 5;    //分類
@@ -13,23 +12,23 @@ var MASTER_APV = 12;   //承認者
 var MASTER_APD = 13;   //承認日付
 var MASTER_SND = 14;   //送付日
 var MASTER_SAV = 16;   //保存期間
-var MASTER_TGT = 19;   //送付先
+var MASTER_TGT = 19;   //送付先 ← S列以降に○があればOK
+var CHECK_SEND_FLAG = 8; // 追加：送付フラグの列番号（H列）
 
-// 概要
+// ■概要
 // 文書管理マスター内のデータに不備が無いか確認する
 // 主なチェック対象は「棚卸し」シートに記載
 // チェック対象はログへ出力され、作成者へメールで通知される
 // 正社員のみを対象にメール通知 ⇒ 課名単位であれば正社員のみへ通知が発生する
 
 function CheckLog() {
-    let ss = SpreadsheetApp.getActiveSpreadsheet();
+    let ss = SpreadsheetApp.getActiveSpreadsheet()
     
     // 参照元を取得
-    let sheet_check = ss.getSheetByName("棚卸しログ");
     let sheet_Mastar = ss.getSheetByName("文書管理マスター");
+    let sheet_check = ss.getSheetByName("棚卸しログ");
     let sheet_NotTgt = ss.getSheetByName("対象外リスト");
     
-    // フィルタ解除
     let filter = sheet_check.getDataRange().getFilter();
     filter.remove(); //フィルタを解除
 
@@ -45,29 +44,30 @@ function CheckLog() {
     
     // ヘッダーカラム
     let header_Check = 1;
-    let header_Mastar = 5;
-
+    
     // タイムスタンプ
     let date = new Date();
-    date = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy/MM/dd');
+    date = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
 
-    // 対象外リストを取得
-    for(i = 1 ; i < data_NotTgt.length ; i++){
-        if(data_NotTgt[0][1] == "対象外"){
-            for(j = 1 ; j < data_NotTgt.length ; j++){
-                notTarget = notTarget + data_NotTgt[j][1] + ",";
-            }
-            break;
+    for( i = 1 ; i < data_NotTgt.length ; i++){
+      
+      if(data_NotTgt[0][i] == "対象外"){
+        
+        for( j = 1 ; j < data_NotTgt.length ; j++){
+          notTarget = notTarget + data_NotTgt[j][i] + ",";
         }
+        break;
+      }
     }
-    
-    console.log(notTarget)
 
+    console.log(notTarget)
+    
+    let header_Mastar = 5;
     for(i = header_Mastar ; i < data_Mastar.length ; i++){
         sutatus_Result = "";
         if(data_Mastar[i][MASTER_SUT] == "open" && data_Mastar[i][MASTER_APD] != ""){
             
-            sutatus_Result = CheckRecipient(i , data_Mastar , sutatus_Result , "ファイル名重複\n", notTarget)
+            sutatus_Result = CheckRecipient(i , data_Mastar , sutatus_Result , "ファイル名重複\n" , notTarget)
             sutatus_Result = CheckDuplication(i , data_Mastar , sutatus_Result , "送付先\n")
             
             sutatus_Result = CheckSpace(i , MASTER_CLS , data_Mastar , sutatus_Result , "分類\n");
@@ -85,36 +85,49 @@ function CheckLog() {
                 console.log(sutatus_Result)
             }
             
-            data_Result.push([ date , 
-                      sutatus_Result , 
-                      data_Mastar[i][MASTER_NNM] , 
-                      data_Mastar[i][MASTER_FIL],
-                      data_Mastar[i][MASTER_DIV],
-                      data_Mastar[i][MASTER_MAK],
-                      data_Mastar[i][MASTER_APV]]);
+            data_Result.push([ date,
+                            sutatus_Result,
+                            data_Mastar[i][MASTER_NNM],
+                            data_Mastar[i][MASTER_FIL],
+                            data_Mastar[i][MASTER_DIV],
+                            data_Mastar[i][MASTER_MAK],
+                            data_Mastar[i][MASTER_APV]]);
         }
     }
 
-    if(data_Result.length > 0) {
-        // チェックボックスの状態を保存
-        const lastRow = sheet_check.getLastRow();
-        const checkboxValues = sheet_check.getRange(2, 9, lastRow - 1, 1).getValues();
+    // 追加：ログ追加時のチェックマーク処理
+    const testRange = sheet_check.getRange("A2:G" + (data_Result.length + 1));
+    // 現在の行を下にずらす
+    testRange.insertCells(SpreadsheetApp.Dimension.ROWS);
 
-        const testRange = sheet_check.getRange("A2:G" + (data_Result.length + 1));
-        testRange.insertCells(SpreadsheetApp.Dimension.ROWS);
-        sheet_check.getRange(1 + header_Check, 1, data_Result.length, data_Result[0].length).setValues(data_Result);
+    // 追加：チェック列の調整
+    const checkColumn = sheet_check.getRange("H2:H" + sheet_check.getLastRow());
+    const checkValues = checkColumn.getValues();
+    const newCheckValues = new Array(data_Result.length).fill([false]);
 
-        // チェックボックスの状態を復元
-        if(lastRow > 1) {
-            sheet_check.getRange(2 + data_Result.length, 9, checkboxValues.length, 1).setValues(checkboxValues);
+    // 追加：既存のチェック値を下にずらす
+    for(let i = 0; i < checkValues.length; i++) {
+        if(i + data_Result.length < checkValues.length) {
+            checkValues[i + data_Result.length] = checkValues[i];
         }
     }
 
+    // 追加：新しい行のチェックを設定
+    for(let i = 0; i < data_Result.length; i++) {
+        checkValues[i] = [false];
+    }
+
+    // 追加：更新した値を書き戻す
+    checkColumn.setValues(checkValues);
+    
+    sheet_check.getRange(1 + header_Check , 1 , data_Result.length , data_Result[0].length).setValues(data_Result);
+    
     sheet_check.getDataRange().createFilter();
 }
 
-// 空白チェック
-function CheckSpace(i , targetIdx , data , result , str){
+// 空白チェック（変更なし）
+function CheckSpace( i , targetIdx , data , result , str){
+    
     if(data[i][targetIdx] == ""){
         result += str;
         console.log(data[i][MASTER_NNM])
@@ -123,8 +136,9 @@ function CheckSpace(i , targetIdx , data , result , str){
     return result;
 }
 
-// 重複チェック
+// 重複チェック（変更なし）
 function CheckRecipient(t , data , result , str , notTgt){
+    
     if(String(notTgt).match(data[t][MASTER_NNM]) == null){
         for(j = 0 ; j < data.length ; j++){
             if(data[t][MASTER_FIL] != ""){
@@ -139,10 +153,11 @@ function CheckRecipient(t , data , result , str , notTgt){
             }
         }
     }
+
     return result;
 }
 
-// 送付先チェック
+// 送付先チェック（変更なし）
 function CheckDuplication(t , data , result , str){
     let cnt = 0;
     
