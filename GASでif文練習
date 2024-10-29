@@ -1,4 +1,4 @@
-// ■グローバル変数（変更なし）
+// ■グローバル変数
 var MASTER_SUT = 0;    //ステータス
 var MASTER_NNM = 2;    //管理番号
 var MASTER_CLS = 5;    //分類
@@ -13,7 +13,8 @@ var MASTER_APD = 13;   //承認日付
 var MASTER_SND = 14;   //送付日
 var MASTER_SAV = 16;   //保存期間
 var MASTER_TGT = 19;   //送付先 ← S列以降に○があればOK
-var CHECK_SEND_FLAG = 8; // 追加：送付フラグの列番号（H列）
+// 追加: 送付フラグの列番号定義
+var CHECK_SEND_FLAG = 8;  // H列
 
 // ■概要
 // 文書管理マスター内のデータに不備が無いか確認する
@@ -50,9 +51,7 @@ function CheckLog() {
     date = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
 
     for( i = 1 ; i < data_NotTgt.length ; i++){
-      
       if(data_NotTgt[0][i] == "対象外"){
-        
         for( j = 1 ; j < data_NotTgt.length ; j++){
           notTarget = notTarget + data_NotTgt[j][i] + ",";
         }
@@ -95,55 +94,61 @@ function CheckLog() {
         }
     }
 
-    // 追加：ログ追加時のチェックマーク処理
-    const testRange = sheet_check.getRange("A2:G" + (data_Result.length + 1));
-    // 現在の行を下にずらす
-    testRange.insertCells(SpreadsheetApp.Dimension.ROWS);
-
-    // 追加：チェック列の調整
-    const checkColumn = sheet_check.getRange("H2:H" + sheet_check.getLastRow());
-    const checkValues = checkColumn.getValues();
-    const newCheckValues = new Array(data_Result.length).fill([false]);
-
-    // 追加：既存のチェック値を下にずらす
-    for(let i = 0; i < checkValues.length; i++) {
-        if(i + data_Result.length < checkValues.length) {
-            checkValues[i + data_Result.length] = checkValues[i];
+    // 変更: データ追加処理の修正
+    if (data_Result.length > 0) {
+        // 挿入する行数を取得
+        const insertRows = data_Result.length;
+        
+        // 挿入位置から指定行数分の範囲を取得
+        const insertRange = sheet_check.getRange(2, 1, insertRows, sheet_check.getLastColumn());
+        
+        // 行を挿入
+        insertRange.insertCells(SpreadsheetApp.Dimension.ROWS);
+        
+        // チェックマークの調整
+        const lastRow = sheet_check.getLastRow();
+        if (lastRow > insertRows + 1) {
+            // 既存のチェックマーク列を取得
+            const existingChecks = sheet_check.getRange(2, CHECK_SEND_FLAG + 1, lastRow - 1).getValues();
+            
+            // 新しいチェックマーク配列を作成
+            const newChecks = [];
+            // 新しい行分の空データを追加
+            for (let i = 0; i < insertRows; i++) {
+                newChecks.push([false]);
+            }
+            // 既存のチェックデータを追加
+            existingChecks.forEach(check => {
+                newChecks.push(check);
+            });
+            
+            // 更新したチェークマークを書き戻す
+            sheet_check.getRange(2, CHECK_SEND_FLAG + 1, newChecks.length).setValues(newChecks);
         }
+        
+        // 新しいデータを書き込む
+        sheet_check.getRange(2, 1, data_Result.length, data_Result[0].length).setValues(data_Result);
     }
-
-    // 追加：新しい行のチェックを設定
-    for(let i = 0; i < data_Result.length; i++) {
-        checkValues[i] = [false];
-    }
-
-    // 追加：更新した値を書き戻す
-    checkColumn.setValues(checkValues);
     
-    sheet_check.getRange(1 + header_Check , 1 , data_Result.length , data_Result[0].length).setValues(data_Result);
-    
+    // フィルターの再作成
     sheet_check.getDataRange().createFilter();
 }
 
 // 空白チェック（変更なし）
 function CheckSpace( i , targetIdx , data , result , str){
-    
     if(data[i][targetIdx] == ""){
         result += str;
         console.log(data[i][MASTER_NNM])
     }
-    
     return result;
 }
 
 // 重複チェック（変更なし）
 function CheckRecipient(t , data , result , str , notTgt){
-    
     if(String(notTgt).match(data[t][MASTER_NNM]) == null){
         for(j = 0 ; j < data.length ; j++){
             if(data[t][MASTER_FIL] != ""){
                 if(data[t][MASTER_FIL] == data[j][MASTER_FIL] && t != j){
-                    
                     result += str;
                     break;
                 }
@@ -153,24 +158,20 @@ function CheckRecipient(t , data , result , str , notTgt){
             }
         }
     }
-
     return result;
 }
 
 // 送付先チェック（変更なし）
 function CheckDuplication(t , data , result , str){
     let cnt = 0;
-    
     for(j = MASTER_TGT ; j < data[4].length ; j++){
         if(data[t][j] != ""){
             cnt++;
             break;
         }
     }
-    
     if(cnt == 0){
         result += str;
     }
-    
     return result;
 }
