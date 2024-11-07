@@ -10,7 +10,7 @@ class ExcelFileSelector:
         self.root.title("Excelファイル選択")
         
         # ウィンドウサイズの設定
-        self.root.geometry("500x250")
+        self.root.geometry("500x300")
         
         # パスを読み込むExcelファイルの設定
         self.config_excel = "C:/path/to/config.xlsx"  # 設定ファイルのパス
@@ -19,6 +19,9 @@ class ExcelFileSelector:
         
         # 選択されたファイルのパスを保存する変数
         self.selected_file_path = tk.StringVar()
+        
+        # 読み込んだデータを保存する変数
+        self.df = None
         
         # UIの作成
         self.create_widgets()
@@ -66,6 +69,16 @@ class ExcelFileSelector:
         )
         open_button.pack(pady=10)
         
+        # データ読み込みボタン
+        read_button = tk.Button(
+            frame,
+            text="データを読み込む",
+            command=self.read_excel_data,
+            width=20,
+            height=2
+        )
+        read_button.pack(pady=10)
+        
     def get_directory_from_excel(self):
         try:
             wb = load_workbook(self.config_excel)
@@ -111,6 +124,39 @@ class ExcelFileSelector:
             os.startfile(file_path)
         except Exception as e:
             messagebox.showerror("エラー", f"ファイルを開けませんでした: {str(e)}")
+
+    def read_excel_data(self):
+        """選択されたExcelファイルをpandasで読み込む"""
+        file_path = self.selected_file_path.get()
+        
+        if not file_path:
+            messagebox.showwarning("警告", "ファイルが選択されていません")
+            return
+            
+        if not os.path.exists(file_path):
+            messagebox.showerror("エラー", "選択されたファイルが見つかりません")
+            return
+            
+        try:
+            # Excelファイルを読み込む
+            self.df = pd.read_excel(file_path)
+            
+            # 読み込み成功のメッセージを表示
+            rows, cols = self.df.shape
+            messagebox.showinfo(
+                "成功",
+                f"データを読み込みました\n"
+                f"行数: {rows}\n"
+                f"列数: {cols}\n"
+                f"列名: {', '.join(self.df.columns)}"
+            )
+            
+            # ここで self.df に対して必要な処理を行うことができます
+            return self.df
+            
+        except Exception as e:
+            messagebox.showerror("エラー", f"データの読み込みに失敗しました: {str(e)}")
+            return None
 
 def main():
     root = tk.Tk()
