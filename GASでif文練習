@@ -1,177 +1,63 @@
-// ■グローバル変数
-var MASTER_SUT = 0;    //ステータス
-var MASTER_NNM = 2;    //管理番号
-var MASTER_CLS = 5;    //分類
-var MASTER_FIL = 6;    //ファイル名
-var MASTER_OVV = 7;    //概要
-var MASTER_DCL = 8;    //資料リンク
-var MASTER_DLD = 9;    //資料リンク開示範囲
-var MASTER_DIV = 10;   //課名
-var MASTER_MAK = 11;   //作成者
-var MASTER_APV = 12;   //承認者
-var MASTER_APD = 13;   //承認日付
-var MASTER_SND = 14;   //送付日
-var MASTER_SAV = 16;   //保存期間
-var MASTER_TGT = 19;   //送付先 ← S列以降に○があればOK
-// 追加: 送付フラグの列番号定義
-var CHECK_SEND_FLAG = 8;  // H列
+import tkinter as tk
+from tkinter import messagebox
+import pandas as pd
+import os
+from openpyxl import load_workbook
 
-// ■概要
-// 文書管理マスター内のデータに不備が無いか確認する
-// 主なチェック対象は「棚卸し」シートに記載
-// チェック対象はログへ出力され、作成者へメールで通知される
-// 正社員のみを対象にメール通知 ⇒ 課名単位であれば正社員のみへ通知が発生する
-
-function CheckLog() {
-    let ss = SpreadsheetApp.getActiveSpreadsheet()
-    
-    // 参照元を取得
-    let sheet_Mastar = ss.getSheetByName("文書管理マスター");
-    let sheet_check = ss.getSheetByName("棚卸しログ");
-    let sheet_NotTgt = ss.getSheetByName("対象外リスト");
-    
-    let filter = sheet_check.getDataRange().getFilter();
-    filter.remove(); //フィルタを解除
-
-    // データ取得
-    let data_Mastar = sheet_Mastar.getDataRange().getValues();
-    // 出力結果
-    let data_Result = [];
-    // ファイル名重複の対象外リスト
-    let data_NotTgt = sheet_NotTgt.getDataRange().getValues();
-    let notTarget = "";
-    
-    let sutatus_Result = "";
-    
-    // ヘッダーカラム
-    let header_Check = 1;
-    
-    // タイムスタンプ
-    let date = new Date();
-    date = Utilities.formatDate( date, 'Asia/Tokyo', 'yyyy/MM/dd');
-
-    for( i = 1 ; i < data_NotTgt.length ; i++){
-      if(data_NotTgt[0][i] == "対象外"){
-        for( j = 1 ; j < data_NotTgt.length ; j++){
-          notTarget = notTarget + data_NotTgt[j][i] + ",";
-        }
-        break;
-      }
-    }
-
-    console.log(notTarget)
-    
-    let header_Mastar = 5;
-    for(i = header_Mastar ; i < data_Mastar.length ; i++){
-        sutatus_Result = "";
-        if(data_Mastar[i][MASTER_SUT] == "open" && data_Mastar[i][MASTER_APD] != ""){
-            
-            sutatus_Result = CheckRecipient(i , data_Mastar , sutatus_Result , "ファイル名重複\n" , notTarget)
-            sutatus_Result = CheckDuplication(i , data_Mastar , sutatus_Result , "送付先\n")
-            
-            sutatus_Result = CheckSpace(i , MASTER_CLS , data_Mastar , sutatus_Result , "分類\n");
-            sutatus_Result = CheckSpace(i , MASTER_FIL , data_Mastar , sutatus_Result , "ファイル名\n");
-            sutatus_Result = CheckSpace(i , MASTER_OVV , data_Mastar , sutatus_Result , "概要\n");
-            sutatus_Result = CheckSpace(i , MASTER_DCL , data_Mastar , sutatus_Result , "資料リンク\n");
-            sutatus_Result = CheckSpace(i , MASTER_DLD , data_Mastar , sutatus_Result , "資料リンク開示範囲\n");
-            sutatus_Result = CheckSpace(i , MASTER_MAK , data_Mastar , sutatus_Result , "作成者\n");
-            sutatus_Result = CheckSpace(i , MASTER_APV , data_Mastar , sutatus_Result , "承認者\n");
-            sutatus_Result = CheckSpace(i , MASTER_SND , data_Mastar , sutatus_Result , "送付日\n");
-            sutatus_Result = CheckSpace(i , MASTER_SAV , data_Mastar , sutatus_Result , "保存期間\n");
-            
-            // イレギュラーステータスの無い場合※正常な記入
-            if(sutatus_Result != ""){
-                console.log(sutatus_Result)
-            }
-            
-            data_Result.push([ date,
-                            sutatus_Result,
-                            data_Mastar[i][MASTER_NNM],
-                            data_Mastar[i][MASTER_FIL],
-                            data_Mastar[i][MASTER_DIV],
-                            data_Mastar[i][MASTER_MAK],
-                            data_Mastar[i][MASTER_APV]]);
-        }
-    }
-
-    // 変更: データ追加処理の修正
-    if (data_Result.length > 0) {
-        // 挿入する行数を取得
-        const insertRows = data_Result.length;
+class ExcelFileOpener:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Excel File Opener")
         
-        // 挿入位置から指定行数分の範囲を取得
-        const insertRange = sheet_check.getRange(2, 1, insertRows, sheet_check.getLastColumn());
+        # ウィンドウサイズの設定
+        self.root.geometry("400x200")
         
-        // 行を挿入
-        insertRange.insertCells(SpreadsheetApp.Dimension.ROWS);
+        # パスを読み込むExcelファイルの設定
+        self.config_excel = "C:/path/to/config.xlsx"  # 設定ファイルのパス
+        self.sheet_name = "Sheet1"                    # シート名
+        self.cell = "A1"                             # パスが書かれているセル
         
-        // チェックマークの調整
-        const lastRow = sheet_check.getLastRow();
-        if (lastRow > insertRows + 1) {
-            // 既存のチェックマーク列を取得
-            const existingChecks = sheet_check.getRange(2, CHECK_SEND_FLAG + 1, lastRow - 1).getValues();
-            
-            // 新しいチェックマーク配列を作成
-            const newChecks = [];
-            // 新しい行分の空データを追加
-            for (let i = 0; i < insertRows; i++) {
-                newChecks.push([false]);
-            }
-            // 既存のチェックデータを追加
-            existingChecks.forEach(check => {
-                newChecks.push(check);
-            });
-            
-            // 更新したチェークマークを書き戻す
-            sheet_check.getRange(2, CHECK_SEND_FLAG + 1, newChecks.length).setValues(newChecks);
-        }
+        # UIの作成
+        self.create_widgets()
         
-        // 新しいデータを書き込む
-        sheet_check.getRange(2, 1, data_Result.length, data_Result[0].length).setValues(data_Result);
-    }
+    def create_widgets(self):
+        # ラベルの作成
+        label = tk.Label(self.root, text="以下のボタンをクリックしてファイルを開きます", pady=20)
+        label.pack()
+        
+        # ボタンの作成
+        open_button = tk.Button(self.root, text="ファイルを開く", command=self.open_file)
+        open_button.pack(pady=20)
+        
+    def get_file_path_from_excel(self):
+        try:
+            # Excelファイルを読み込む
+            wb = load_workbook(self.config_excel)
+            ws = wb[self.sheet_name]
+            file_path = ws[self.cell].value
+            wb.close()
+            return file_path
+        except Exception as e:
+            messagebox.showerror("エラー", f"Excelファイルの読み込みに失敗しました: {str(e)}")
+            return None
     
-    // フィルターの再作成
-    sheet_check.getDataRange().createFilter();
-}
+    def open_file(self):
+        # Excelからファイルパスを取得
+        file_path = self.get_file_path_from_excel()
+        
+        if file_path and os.path.exists(file_path):
+            try:
+                # OSのデフォルトアプリケーションでファイルを開く
+                os.startfile(file_path)
+            except Exception as e:
+                messagebox.showerror("エラー", f"ファイルを開けませんでした: {str(e)}")
+        else:
+            messagebox.showerror("エラー", "指定されたファイルが見つかりません")
 
-// 空白チェック（変更なし）
-function CheckSpace( i , targetIdx , data , result , str){
-    if(data[i][targetIdx] == ""){
-        result += str;
-        console.log(data[i][MASTER_NNM])
-    }
-    return result;
-}
+def main():
+    root = tk.Tk()
+    app = ExcelFileOpener(root)
+    root.mainloop()
 
-// 重複チェック（変更なし）
-function CheckRecipient(t , data , result , str , notTgt){
-    if(String(notTgt).match(data[t][MASTER_NNM]) == null){
-        for(j = 0 ; j < data.length ; j++){
-            if(data[t][MASTER_FIL] != ""){
-                if(data[t][MASTER_FIL] == data[j][MASTER_FIL] && t != j){
-                    result += str;
-                    break;
-                }
-            }else{
-                // ファイル名が空白の場合はチェック対象外
-                break;
-            }
-        }
-    }
-    return result;
-}
-
-// 送付先チェック（変更なし）
-function CheckDuplication(t , data , result , str){
-    let cnt = 0;
-    for(j = MASTER_TGT ; j < data[4].length ; j++){
-        if(data[t][j] != ""){
-            cnt++;
-            break;
-        }
-    }
-    if(cnt == 0){
-        result += str;
-    }
-    return result;
-}
+if __name__ == "__main__":
+    main()
