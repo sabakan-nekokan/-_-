@@ -4,164 +4,116 @@ import pandas as pd
 import os
 from openpyxl import load_workbook
 
-class ExcelFileSelector:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Excelファイル選択")
-        
-        # ウィンドウサイズの設定
-        self.root.geometry("500x300")
-        
-        # パスを読み込むExcelファイルの設定
-        self.config_excel = "C:/path/to/config.xlsx"  # 設定ファイルのパス
-        self.sheet_name = "Sheet1"                    # シート名
-        self.cell = "A1"                             # ディレクトリパスが書かれているセル
-        
-        # 選択されたファイルのパスを保存する変数
-        self.selected_file_path = tk.StringVar()
-        
-        # 読み込んだデータを保存する変数
-        self.df = None
-        
-        # UIの作成
-        self.create_widgets()
-        
-    def create_widgets(self):
-        # フレームの作成
-        frame = tk.Frame(self.root, padx=20, pady=20)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        # タイトルラベル
-        title_label = tk.Label(
-            frame, 
-            text="Excelファイルを選択してください", 
-            font=("Helvetica", 12, "bold"),
-            pady=10
-        )
-        title_label.pack()
-        
-        # ファイル選択ボタン
-        select_button = tk.Button(
-            frame,
-            text="Excelファイル選択",
-            command=self.select_file,
-            width=20,
-            height=2
-        )
-        select_button.pack(pady=10)
-        
-        # 選択されたファイルパスを表示するラベル
-        path_label = tk.Label(
-            frame,
-            textvariable=self.selected_file_path,
-            wraplength=400,
-            pady=10
-        )
-        path_label.pack()
-        
-        # ファイルを開くボタン
-        open_button = tk.Button(
-            frame,
-            text="選択したファイルを開く",
-            command=self.open_selected_file,
-            width=20,
-            height=2
-        )
-        open_button.pack(pady=10)
-        
-        # データ読み込みボタン
-        read_button = tk.Button(
-            frame,
-            text="データを読み込む",
-            command=self.read_excel_data,
-            width=20,
-            height=2
-        )
-        read_button.pack(pady=10)
-        
-    def get_directory_from_excel(self):
-        try:
-            wb = load_workbook(self.config_excel)
-            ws = wb[self.sheet_name]
-            directory_path = ws[self.cell].value
-            wb.close()
-            return directory_path
-        except Exception as e:
-            messagebox.showerror("エラー", f"Excelファイルの読み込みに失敗しました: {str(e)}")
-            return None
+# メインウィンドウの作成
+root = tk.Tk()
+root.title("Excelファイル選択")
+root.geometry("500x300")
+
+# 選択されたファイルパスを保存する変数
+selected_file_path = tk.StringVar()
+
+# 設定ファイルの情報
+config_excel = "C:/path/to/config.xlsx"  # 設定ファイルのパス
+sheet_name = "Sheet1"                    # シート名
+cell = "A1"                             # ディレクトリパスが書かれているセル
+
+# データフレームを格納する変数
+df = None
+
+def select_file():
+    try:
+        # 初期ディレクトリの取得
+        wb = load_workbook(config_excel)
+        ws = wb[sheet_name]
+        initial_dir = ws[cell].value
+        wb.close()
+    except:
+        initial_dir = os.path.expanduser("~")
     
-    def select_file(self):
-        # Excelからディレクトリパスを取得
-        initial_dir = self.get_directory_from_excel()
+    # ファイル選択ダイアログを表示
+    file_path = filedialog.askopenfilename(
+        initialdir=initial_dir,
+        title="Excelファイルを選択してください",
+        filetypes=(("Excelファイル", "*.xlsx *.xls"),)
+    )
+    
+    if file_path:
+        selected_file_path.set(file_path)
+
+def read_excel_data():
+    global df
+    file_path = selected_file_path.get()
+    
+    if not file_path:
+        messagebox.showwarning("警告", "ファイルが選択されていません")
+        return
+    
+    try:
+        # Excelファイルを読み込む
+        df = pd.read_excel(file_path)
         
-        if not initial_dir or not os.path.exists(initial_dir):
-            initial_dir = os.path.expanduser("~")
-        
-        # Excelファイルのみを選択できるダイアログを表示
-        file_path = filedialog.askopenfilename(
-            initialdir=initial_dir,
-            title="Excelファイルを選択してください",
-            filetypes=(
-                ("Excelファイル", "*.xlsx *.xls"),
-            )
+        # 読み込み成功のメッセージを表示
+        rows, cols = df.shape
+        messagebox.showinfo(
+            "成功",
+            f"データを読み込みました\n"
+            f"行数: {rows}\n"
+            f"列数: {cols}\n"
+            f"列名: {', '.join(df.columns)}"
         )
         
-        if file_path:
-            self.selected_file_path.set(file_path)
-    
-    def open_selected_file(self):
-        file_path = self.selected_file_path.get()
+        # ここでdfに対して必要な処理を行うことができます
+        # 例: print(df.head())
         
-        if not file_path:
-            messagebox.showwarning("警告", "ファイルが選択されていません")
-            return
-            
-        if not os.path.exists(file_path):
-            messagebox.showerror("エラー", "選択されたファイルが見つかりません")
-            return
-            
-        try:
-            os.startfile(file_path)
-        except Exception as e:
-            messagebox.showerror("エラー", f"ファイルを開けませんでした: {str(e)}")
+    except Exception as e:
+        messagebox.showerror("エラー", f"データの読み込みに失敗しました: {str(e)}")
 
-    def read_excel_data(self):
-        """選択されたExcelファイルをpandasで読み込む"""
-        file_path = self.selected_file_path.get()
-        
-        if not file_path:
-            messagebox.showwarning("警告", "ファイルが選択されていません")
-            return
-            
-        if not os.path.exists(file_path):
-            messagebox.showerror("エラー", "選択されたファイルが見つかりません")
-            return
-            
-        try:
-            # Excelファイルを読み込む
-            self.df = pd.read_excel(file_path)
-            
-            # 読み込み成功のメッセージを表示
-            rows, cols = self.df.shape
-            messagebox.showinfo(
-                "成功",
-                f"データを読み込みました\n"
-                f"行数: {rows}\n"
-                f"列数: {cols}\n"
-                f"列名: {', '.join(self.df.columns)}"
-            )
-            
-            # ここで self.df に対して必要な処理を行うことができます
-            return self.df
-            
-        except Exception as e:
-            messagebox.showerror("エラー", f"データの読み込みに失敗しました: {str(e)}")
-            return None
+# メインフレームの作成
+frame = tk.Frame(root, padx=20, pady=20)
+frame.pack(fill=tk.BOTH, expand=True)
 
-def main():
-    root = tk.Tk()
-    app = ExcelFileSelector(root)
-    root.mainloop()
+# タイトルラベル
+title_label = tk.Label(
+    frame, 
+    text="Excelファイルを選択してください", 
+    font=("Helvetica", 12, "bold"),
+    pady=10
+)
+title_label.pack()
 
-if __name__ == "__main__":
-    main()
+# ファイル選択ボタン
+select_button = tk.Button(
+    frame,
+    text="Excelファイル選択",
+    command=select_file,
+    width=20,
+    height=2
+)
+select_button.pack(pady=10)
+
+# 選択されたファイルパスを表示するラベル
+path_label = tk.Label(
+    frame,
+    textvariable=selected_file_path,
+    wraplength=400,
+    pady=10
+)
+path_label.pack()
+
+# データ読み込みボタン
+read_button = tk.Button(
+    frame,
+    text="データを読み込む",
+    command=read_excel_data,
+    width=20,
+    height=2
+)
+read_button.pack(pady=10)
+
+# メインループの開始
+root.mainloop()
+
+# メインループが終了した後、dfに読み込んだデータが格納されています
+# 必要な処理をここに書くことができます
+# 例: if df is not None:
+#         print(df.describe())
