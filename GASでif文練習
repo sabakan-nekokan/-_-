@@ -3,13 +3,21 @@ function dailyLogUpdate() {
   const sourceSheet = SpreadsheetApp.openById('取得元のスプレッドシートID').getSheetByName('シート名');
   const logSheet = SpreadsheetApp.openById('貼り付け先のスプレッドシートID').getSheetByName('ADM_N発回線');
   
-  // 2. データの取得
+  // 2. データの取得（空白行も含む）
   const headers = sourceSheet.getRange('2:2').getValues()[0];
   const lagCol = headers.indexOf('撤去可(LAGとゴミ有り)') + 1;
   const removeCol = headers.indexOf('撤去可') + 1;
   
+  // データ範囲を取得（最終行まで全て取得）
   const lastRow = sourceSheet.getLastRow();
-  const todayData = sourceSheet.getRange(3, lagCol, lastRow - 2, 2).getValues();
+  const lagData = sourceSheet.getRange(3, lagCol, lastRow - 2, 1).getValues();
+  const removeData = sourceSheet.getRange(3, removeCol, lastRow - 2, 1).getValues();
+  
+  // データを結合（空白はそのまま保持）
+  const todayData = lagData.map((row, i) => [
+    row[0] === '' ? '' : row[0],  // 空白はそのまま
+    removeData[i][0] === '' ? '' : removeData[i][0]  // 空白はそのまま
+  ]);
   
   // 3. データの貼り付け
   const date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
@@ -19,7 +27,7 @@ function dailyLogUpdate() {
   logSheet.getRange(3, 2, 1, 2).setValues([["撤去可(LAGとゴミ有り)", "撤去可"]]);
   logSheet.getRange(4, 2, todayData.length, 2).setValues(todayData);
   
-  // 4. 前日データと比較して差分を通知
+  // 4. 前日データと比較して差分を通知（空白も比較対象に）
   const yesterdayData = logSheet.getRange(4, 4, todayData.length, 2).getValues();
   let message = '';
   
@@ -27,10 +35,10 @@ function dailyLogUpdate() {
     if (todayData[i][0] !== yesterdayData[i][0] || todayData[i][1] !== yesterdayData[i][1]) {
       message += `${i + 4}行目:\n`;
       if (todayData[i][0] !== yesterdayData[i][0]) {
-        message += `LAG: ${yesterdayData[i][0]} → ${todayData[i][0]}\n`;
+        message += `LAG: ${yesterdayData[i][0] || '空白'} → ${todayData[i][0] || '空白'}\n`;
       }
       if (todayData[i][1] !== yesterdayData[i][1]) {
-        message += `撤去可: ${yesterdayData[i][1]} → ${todayData[i][1]}\n`;
+        message += `撤去可: ${yesterdayData[i][1] || '空白'} → ${todayData[i][1] || '空白'}\n`;
       }
     }
   }
