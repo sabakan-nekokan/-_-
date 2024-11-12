@@ -1,155 +1,88 @@
-/**
- * マイグレーション予実管理の自動チェック機能
- * 毎日7:00-8:00の間に実行され、データの取得・比較・通知を行う
- */
-function checkMigrationData() {
-  try {
-    // スプレッドシートの取得
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetNames = ['JEC', 'EAギガ', 'おとくE1パス', 'EC-LAG(TNマイグレ)', 'はえ縄'];
-    const today = new Date();
+function dailyLogUpdate() {
+  // スプレッドシートを取得
+  const ss = SpreadspreadApp.getActiveSpreadsheet();
+  const masterSheet = ss.getSheetByName('Master'); // データ取得元シート
+  const logSheet = ss.getSheetByName('ADM_N発回線');  // ログ記録用シート
+  
+  // 今日の日付を取得
+  const today = new Date();
+  const dateString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy/MM/dd');
+  
+  // マスターシートからBXとBY列を取得
+  const rangeBX = masterSheet.getRange('BX:BX').getValues();
+  const rangeBY = masterSheet.getRange('BY:BY').getValues();
+  
+  // 両方の列から有効なデータを抽出
+  let combinedValues = [];
+  for (let i = 0; i < rangeBX.length; i++) {
+    // BX列とBY列の値を組み合わせて1行にする
+    combinedValues.push([rangeBX[i][0], rangeBY[i][0]]);
+  }
+  
+  // 空行を除外（両方の列が空の場合のみ除外）
+  combinedValues = combinedValues.filter(row => row[0] !== '' || row[1] !== '');
+  
+  // 前日のデータを取得（存在する場合）
+  const lastCol = logSheet.getLastColumn();
+  const lastDateCell = logSheet.getRange(1, lastCol);
+  const yesterdayValues = lastCol > 1 ? 
+    logSheet.getRange(2, lastCol - 1, combinedValues.length, 2).getValues() : null;
+  
+  // 新しい列に日付とデータを追加
+  const newCol = lastCol + 1;
+  logSheet.getRange(1, newCol).setValue(dateString);  // 日付を記入
+  logSheet.getRange(2, newCol, combinedValues.length, 2).setValues(combinedValues);  // データを記入
+  
+  // 前日データと比較して差分があれば通知
+  if (yesterdayValues) {
+    let differences = [];
     
-    // 各シートのチェック
-    sheetNames.forEach(sheetName => {
-      const sheet = ss.getSheetByName(sheetName);
-      if (!sheet) {
-        Logger.log(`シート「${sheetName}」が見つかりません`);
-        return;
+    for (let i = 0; i < combinedValues.length; i++) {
+      const bxDiff = combinedValues[i][0] !== yesterdayValues[i][0];
+      const byDiff = combinedValues[i][1] !== yesterdayValues[i][1];
+      
+      if (bxDiff || byDiff) {
+        differences.push({
+          row: i + 2,
+          bx: {
+            yesterday: yesterdayValues[i][0],
+            today: combinedValues[i][0],
+            changed: bxDiff
+          },
+          by: {
+            yesterday: yesterdayValues[i][1],
+            today: combinedValues[i][1],
+            changed: byDiff
+          }
+        });
       }
-
-      // データ範囲の取得
-      const lastRow = sheet.getLastRow();
-      const data = sheet.getRange(4, 1, lastRow-3, 6).getValues(); // A4セルから開始
-
-      // 当日と前日の列を比較（計画値と実績値）
-      data.forEach((row, index) => {
-        const rowNum = index + 4; // 実際の行番号
-        const month = row[0]; // A列：月
-        const todayPlan = row[1]; // B列：当日計画
-        const todayActual = row[2]; // C列：当日実績
-        const yesterdayPlan = row[3]; // D列：前日計画
-        const yesterdayActual = row[4]; // E列：前日実績
-
-        // 計画値の減少チェック
-        if (todayPlan < yesterdayPlan) {
-          // セルの色を変更（赤色）
-          sheet.getRange(rowNum, 2).setBackground('#ffcdd2');
-          
-          // チャット通知
-          sendNotification({
-            sheetName: sheetName,
-            month: month,
-            type: '計画値',
-            oldValue: yesterdayPlan,
-            newValue: todayPlan,
-            rowNum: rowNum
-          });
+    }
+    
+    // 差分があれば通知
+    if (differences.length > 0) {
+      let message = "前日との差分:\n";
+      differences.forEach(diff => {
+        message += `${diff.row}行目:\n`;
+        if (diff.bx.changed) {
+          message += `  BX列: ${diff.bx.yesterday} → ${diff.bx.today}\n`;
         }
-
-        // 実績値の減少チェック
-        if (todayActual < yesterdayActual) {
-          // セルの色を変更（赤色）
-          sheet.getRange(rowNum, 3).setBackground('#ffcdd2');
-          
-          // チャット通知
-          sendNotification({
-            sheetName: sheetName,
-            month: month,
-            type: '実績値',
-            oldValue: yesterdayActual,
-            newValue: todayActual,
-            rowNum: rowNum
-          });
-        }
-
-        // 増加した場合は緑色にする
-        if (todayPlan > yesterdayPlan) {
-          sheet.getRange(rowNum, 2).setBackground('#c8e6c9');
-        }
-        if (todayActual > yesterdayActual) {
-          sheet.getRange(rowNum, 3).setBackground('#c8e6c9');
+        if (diff.by.changed) {
+          message += `  BY列: ${diff.by.yesterday} → ${diff.by.today}\n`;
         }
       });
-    });
-
-  } catch (error) {
-    Logger.log(`エラーが発生しました: ${error.toString()}`);
-    // エラー通知
-    sendErrorNotification(error);
+      
+      // Google Chatに通知
+      const webhookUrl = "https://chat.googleapis.com/v1/spaces/AAAAWiNFgzw/messages?key=AIzaSyDdl0hCZlE6yvSjMm-WEfRq3CPzqKqqsHI&token=Md4sZXHc5KO8-XFC95YRZZhT9wtoRCXFb46zSY";
+      
+      const payload = {
+        "text": message
+      };
+      
+      UrlFetchApp.fetch(webhookUrl, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload)
+      });
+    }
   }
-}
-
-/**
- * チャット通知を送信する関数
- */
-function sendNotification(data) {
-  const webhookUrl = 'Webhook URL'; // チャットツールのWebhook URLを設定
-  
-  const message = `
-【おとくADM減去】マイグレ予実デイリー差分チェック
-対象: ${data.sheetName} ${formatMonth(data.month)}分
-項番: ${getItemNumber(data.sheetName, data.rowNum)}
-回線名: ${getCircuitName(data.sheetName, data.rowNum)}
-理由: ${data.type}が${data.oldValue}から${data.newValue}に減少
-  `;
-
-  UrlFetchApp.fetch(webhookUrl, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ text: message })
-  });
-}
-
-/**
- * エラー通知を送信する関数
- */
-function sendErrorNotification(error) {
-  const webhookUrl = 'Webhook URL'; // チャットツールのWebhook URLを設定
-  
-  const message = `
-【エラー発生】マイグレ予実チェック
-エラー内容: ${error.toString()}
-発生日時: ${new Date().toLocaleString()}
-  `;
-
-  UrlFetchApp.fetch(webhookUrl, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ text: message })
-  });
-}
-
-/**
- * トリガーを設定する関数
- */
-function setTrigger() {
-  // 既存のトリガーを削除
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => ScriptApp.deleteTrigger(trigger));
-  
-  // 新しいトリガーを設定（毎日7:00に実行）
-  ScriptApp.newTrigger('checkMigrationData')
-    .timeBased()
-    .everyDays(1)
-    .atHour(7)
-    .create();
-}
-
-/**
- * ユーティリティ関数
- */
-function formatMonth(month) {
-  return month.toString().replace('/', '年') + '月';
-}
-
-function getItemNumber(sheetName, rowNum) {
-  // Masterシートから項番を取得する処理
-  // 実装は環境に応じて調整
-  return '項番取得ロジック';
-}
-
-function getCircuitName(sheetName, rowNum) {
-  // Masterシートから回線名を取得する処理
-  // 実装は環境に応じて調整
-  return '回線名取得ロジック';
 }
