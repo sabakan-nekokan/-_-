@@ -1,42 +1,76 @@
-function moveFunction() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = ss.getSheets();
+// 1. 毎日のログ取得機能（7:00-8:00の間に実行）
+function dailyLogCollection() {
+  const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master');
+  const targetSheets = ['JEC', 'EAギガ', 'おとくEパス', 'EC-LAG(TNマイグレ)', 'はえ縦'];
   
-  // シートが3枚あることを確認
-  if (sheets.length !== 3) {
-    throw new Error('シートは3枚必要です');
-  }
-
-  // 各シートの名前を探して並び替え
-  const targetSheet = ss.getSheetByName('対象回線');
-  const migrationSheet = ss.getSheetByName('マイグレ予実');
-  const specialSheet = ss.getSheetByName('特殊回線');
-
-  // すべてのシートが存在することを確認
-  if (!targetSheet || !migrationSheet || !specialSheet) {
-    throw new Error('必要なシートが見つかりません');
-  }
-
-  // シートを指定の順序に移動
-  // 1. 対象回線を先頭に
-  ss.setActiveSheet(targetSheet);
-  ss.moveActiveSheet(1);
-  
-  // 2. マイグレ予実を2番目に
-  ss.setActiveSheet(migrationSheet);
-  ss.moveActiveSheet(2);
-  
-  // 3. 特殊回線を3番目に
-  ss.setActiveSheet(specialSheet);
-  ss.moveActiveSheet(3);
+  // 各シートのデータを取得
+  targetSheets.forEach(sheetName => {
+    collectDataFromSheet(sheetName);
+  });
 }
 
-function moveSheet() {
-  try {
-    moveFunction();
-  } catch(e) {
-    Logger.log(e.name);    // エラー名
-    Logger.log(e.message); // エラーメッセージ
-    Logger.log(e.stack);   // エラー詳細（エラー発生の行番号など）
+// 2. 前日比マイナスチェックとチャット通知
+function checkNegativeChange() {
+  const sheet = SpreadsheetApp.getActiveSheet();
+  const today = new Date();
+  const data = sheet.getDataRange().getValues();
+  
+  // 前日からマイナスになったかチェック
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][1] < data[i][2]) { // 計画値または実績値がマイナスの場合
+      sendChatNotification({
+        sheetName: sheet.getName(),
+        rowData: data[i],
+        date: today
+      });
+    }
   }
+}
+
+// 3. チャット通知送信機能
+function sendChatNotification(data) {
+  const webhookUrl = 'チャットのWebhook URL'; // ChatワークやSlackのWebhook URLを設定
+  
+  const message = {
+    text: `
+【おとくADM減去】マイグレ予実デイリー差分チェック
+対象: ${data.sheetName} ${data.date.getFullYear()}/${(data.date.getMonth() + 1)}分
+値が前日より減少しています。
+計画: ${data.rowData[1]}
+実績: ${data.rowData[2]}
+    `
+  };
+  
+  UrlFetchApp.fetch(webhookUrl, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(message)
+  });
+}
+
+// 4. トリガー設定
+function setDailyTrigger() {
+  // 既存のトリガーを削除
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    ScriptApp.deleteTrigger(trigger);
+  });
+  
+  // 新しいトリガーを設定（毎日7:00に実行）
+  ScriptApp.newTrigger('dailyLogCollection')
+    .timeBased()
+    .everyDays(1)
+    .atHour(7)
+    .create();
+}
+
+// 5. データ取得関数
+function collectDataFromSheet(sheetName) {
+  const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master');
+  const targetSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  
+  // マスターシートから必要なデータを取得
+  const masterData = masterSheet.getRange('A1:Z1000').getValues(); // 範囲は適宜調整
+  
+  // データを処理して保存
+  // ここに具体的なデータ処理ロジックを実装
 }
