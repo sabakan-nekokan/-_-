@@ -1,88 +1,98 @@
 function dailyLogUpdate() {
-  // スプレッドシートを取得
-  const ss = SpreadspreadApp.getActiveSpreadsheet();
-  const masterSheet = ss.getSheetByName('Master'); // データ取得元シート
-  const logSheet = ss.getSheetByName('ADM_N発回線');  // ログ記録用シート
-  
-  // 今日の日付を取得
-  const today = new Date();
-  const dateString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy/MM/dd');
-  
-  // マスターシートからBXとBY列を取得
-  const rangeBX = masterSheet.getRange('BX:BX').getValues();
-  const rangeBY = masterSheet.getRange('BY:BY').getValues();
-  
-  // 両方の列から有効なデータを抽出
-  let combinedValues = [];
-  for (let i = 0; i < rangeBX.length; i++) {
-    // BX列とBY列の値を組み合わせて1行にする
-    combinedValues.push([rangeBX[i][0], rangeBY[i][0]]);
-  }
-  
-  // 空行を除外（両方の列が空の場合のみ除外）
-  combinedValues = combinedValues.filter(row => row[0] !== '' || row[1] !== '');
-  
-  // 前日のデータを取得（存在する場合）
-  const lastCol = logSheet.getLastColumn();
-  const lastDateCell = logSheet.getRange(1, lastCol);
-  const yesterdayValues = lastCol > 1 ? 
-    logSheet.getRange(2, lastCol - 1, combinedValues.length, 2).getValues() : null;
-  
-  // 新しい列に日付とデータを追加
-  const newCol = lastCol + 1;
-  logSheet.getRange(1, newCol).setValue(dateString);  // 日付を記入
-  logSheet.getRange(2, newCol, combinedValues.length, 2).setValues(combinedValues);  // データを記入
-  
-  // 前日データと比較して差分があれば通知
-  if (yesterdayValues) {
-    let differences = [];
+  try {
+    // 1. シートの取得
+    const sourceSpreadsheet = SpreadsheetApp.openById('取得元のスプレッドシートID');
+    const sourceSheet = sourceSpreadsheet.getSheetByName('シート名');
     
-    for (let i = 0; i < combinedValues.length; i++) {
-      const bxDiff = combinedValues[i][0] !== yesterdayValues[i][0];
-      const byDiff = combinedValues[i][1] !== yesterdayValues[i][1];
+    const targetSpreadsheet = SpreadsheetApp.openById('貼り付け先のスプレッドシートID');
+    const targetSheet = targetSpreadsheet.getSheetByName('ADM_N発回線');
+    
+    // 2. データの取得
+    // ヘッダー行（2行目）を取得してインデックスを特定
+    const headers = sourceSheet.getRange(2, 1, 1, sourceSheet.getLastColumn()).getValues()[0];
+    const lagIndex = headers.findIndex(header => header === "撤去可(LAGとゴミ有り)") + 1;
+    const removeIndex = headers.findIndex(header => header === "撤去可") + 1;
+    
+    // データ範囲を取得
+    const lastRow = sourceSheet.getLastRow();
+    const lagValues = sourceSheet.getRange(3, lagIndex, lastRow - 2, 1).getValues();
+    const removeValues = sourceSheet.getRange(3, removeIndex, lastRow - 2, 1).getValues();
+    
+    // データを結合
+    let combinedValues = [];
+    for (let i = 0; i < lagValues.length; i++) {
+      combinedValues.push([lagValues[i][0], removeValues[i][0]]);
+    }
+    
+    // 3. データの貼り付け
+    const today = new Date();
+    const dateString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy/MM/dd');
+    
+    const newCol = targetSheet.getLastColumn() + 1;
+    
+    // 日付を1行目に設定
+    targetSheet.getRange(1, newCol).setValue(dateString);
+    // 3行目にヘッダーを設定
+    targetSheet.getRange(3, newCol, 1, 2).setValues([["撤去可(LAGとゴミ有り)", "撤去可"]]);
+    // 4行目からデータを貼り付け
+    targetSheet.getRange(4, newCol, combinedValues.length, 2).setValues(combinedValues);
+    
+    // 4. データの比較
+    if (newCol > 1) {
+      const yesterdayValues = targetSheet.getRange(4, newCol - 2, combinedValues.length, 2).getValues();
+      let differences = [];
       
-      if (bxDiff || byDiff) {
-        differences.push({
-          row: i + 2,
-          bx: {
-            yesterday: yesterdayValues[i][0],
-            today: combinedValues[i][0],
-            changed: bxDiff
-          },
-          by: {
-            yesterday: yesterdayValues[i][1],
-            today: combinedValues[i][1],
-            changed: byDiff
+      for (let i = 0; i < combinedValues.length; i++) {
+        const lagDiff = combinedValues[i][0] !== yesterdayValues[i][0];
+        const removeDiff = combinedValues[i][1] !== yesterdayValues[i][1];
+        
+        if (lagDiff || removeDiff) {
+          differences.push({
+            row: i + 4,
+            lag: {
+              yesterday: yesterdayValues[i][0],
+              today: combinedValues[i][0],
+              changed: lagDiff
+            },
+            remove: {
+              yesterday: yesterdayValues[i][1],
+              today: combinedValues[i][1],
+              changed: removeDiff
+            }
+          });
+        }
+      }
+      
+      // 5. チャットの送信
+      if (differences.length > 0) {
+        let message = `${dateString} の差分:\n`;
+        differences.forEach(diff => {
+          message += `${diff.row}行目:\n`;
+          if (diff.lag.changed) {
+            message += `  撤去可(LAGとゴミ有り): ${diff.lag.yesterday} → ${diff.lag.today}\n`;
           }
+          if (diff.remove.changed) {
+            message += `  撤去可: ${diff.remove.yesterday} → ${diff.remove.today}\n`;
+          }
+        });
+        
+        const webhookUrl = "https://chat.googleapis.com/v1/spaces/AAAAWiNFgzw/messages?key=AIzaSyDdl0hCZlE6yvSjMm-WEfRq3CPzqKqqsHI&token=Md4sZXHc5KO8-XFC95YRZZhT9wtoRCXFb46zSY";
+        
+        UrlFetchApp.fetch(webhookUrl, {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({ "text": message })
         });
       }
     }
     
-    // 差分があれば通知
-    if (differences.length > 0) {
-      let message = "前日との差分:\n";
-      differences.forEach(diff => {
-        message += `${diff.row}行目:\n`;
-        if (diff.bx.changed) {
-          message += `  BX列: ${diff.bx.yesterday} → ${diff.bx.today}\n`;
-        }
-        if (diff.by.changed) {
-          message += `  BY列: ${diff.by.yesterday} → ${diff.by.today}\n`;
-        }
-      });
-      
-      // Google Chatに通知
-      const webhookUrl = "https://chat.googleapis.com/v1/spaces/AAAAWiNFgzw/messages?key=AIzaSyDdl0hCZlE6yvSjMm-WEfRq3CPzqKqqsHI&token=Md4sZXHc5KO8-XFC95YRZZhT9wtoRCXFb46zSY";
-      
-      const payload = {
-        "text": message
-      };
-      
-      UrlFetchApp.fetch(webhookUrl, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload)
-      });
-    }
+  } catch (error) {
+    // エラー発生時もチャットに通知
+    const webhookUrl = "https://chat.googleapis.com/v1/spaces/AAAAWiNFgzw/messages?key=AIzaSyDdl0hCZlE6yvSjMm-WEfRq3CPzqKqqsHI&token=Md4sZXHc5KO8-XFC95YRZZhT9wtoRCXFb46zSY";
+    UrlFetchApp.fetch(webhookUrl, {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ "text": `エラーが発生しました: ${error.message}` })
+    });
   }
 }
