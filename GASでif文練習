@@ -14,15 +14,6 @@ function dailyLogUpdate() {
   const phaseData = sourceSheet.getRange(4, phaseCol, lastRow - 3, 1).getValues();
   const phaseNotes = sourceSheet.getRange(4, phaseCol, lastRow - 3, 1).getNotes();
   
-  // 値とメモを組み合わせる
-  const todayData = phaseData.map((row, i) => {
-    const value = row[0] === '' ? '' : row[0];
-    const note = phaseNotes[i][0];
-    return [
-      value + (note ? ` (メモ: ${note})` : '')
-    ];
-  });
-  
   // 3. データの貼り付け
   const date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
   logSheet.insertColumnsAfter(3, 1);  // 3列目の後に新しい列を挿入
@@ -34,19 +25,39 @@ function dailyLogUpdate() {
   // ヘッダーを4行目に設定
   logSheet.getRange(4, 4).setValue("撤去Phase");
   
-  // データを5行目から貼り付け
-  const targetRange = logSheet.getRange(5, 4, todayData.length, 1);
-  targetRange.setValues(todayData);
+  // データとメモを5行目から貼り付け
+  const targetRange = logSheet.getRange(5, 4, phaseData.length, 1);
+  targetRange.setValues(phaseData);  // 値の設定
+  
+  // メモを1行ずつ設定
+  for (let i = 0; i < phaseNotes.length; i++) {
+    if (phaseNotes[i][0]) {  // メモが存在する場合のみsetNote
+      logSheet.getRange(5 + i, 4).setNote(phaseNotes[i][0]);
+    }
+  }
   
   // 4. 前日データと比較して差分を通知
-  if (logSheet.getLastColumn() >= 5) {  // 5列目のデータと比較
-    const yesterdayData = logSheet.getRange(5, 5, todayData.length, 1).getValues();
+  if (logSheet.getLastColumn() >= 5) {
+    const yesterdayValues = logSheet.getRange(5, 5, phaseData.length, 1).getValues();
+    const yesterdayNotes = logSheet.getRange(5, 5, phaseData.length, 1).getNotes();
     let message = '';
     
-    for (let i = 0; i < todayData.length; i++) {
-      if (todayData[i][0] !== yesterdayData[i][0]) {
-        message += `${i + 5}行目:\n`;  // 行番号を5行目からスタート
-        message += `撤去Phase: ${yesterdayData[i][0] || '空白'} → ${todayData[i][0] || '空白'}\n`;
+    for (let i = 0; i < phaseData.length; i++) {
+      const valueChanged = phaseData[i][0] !== yesterdayValues[i][0];
+      const noteChanged = phaseNotes[i][0] !== yesterdayNotes[i][0];
+      
+      if (valueChanged || noteChanged) {
+        message += `${i + 5}行目:\n`;
+        
+        if (valueChanged) {
+          message += `値: ${yesterdayValues[i][0] || '空白'} → ${phaseData[i][0] || '空白'}\n`;
+        }
+        
+        if (noteChanged) {
+          message += `メモ: ${yesterdayNotes[i][0] || '空白'} → ${phaseNotes[i][0] || '空白'}\n`;
+        }
+        
+        message += '\n';  // 行の区切りのための空行
       }
     }
     
