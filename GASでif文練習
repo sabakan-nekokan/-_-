@@ -19,31 +19,33 @@ function dailyLogUpdate() {
     const value = row[0] === '' ? '' : row[0];
     const note = phaseNotes[i][0];
     return [
-      value + (note ? ` (メモ: ${note})` : '')  // 値とメモを結合
+      value + (note ? ` (メモ: ${note})` : '')
     ];
   });
   
   // 3. データの貼り付け
   const date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
-  logSheet.insertColumnsAfter(1, 1);
+  logSheet.insertColumnsAfter(3, 1);  // 3列目の後に新しい列を挿入
   
   // 日付を1行目に設定
-  logSheet.getRange(1, 2).setValue(date);
-  // ヘッダーを3行目に設定
-  logSheet.getRange(3, 2).setValue("撤去Phase");
+  logSheet.getRange(1, 4).setValue(date);
+  // 2行目と3行目は空白のまま
   
-  // データを4行目から貼り付け
-  const targetRange = logSheet.getRange(4, 2, todayData.length, 1);
+  // ヘッダーを4行目に設定
+  logSheet.getRange(4, 4).setValue("撤去Phase");
+  
+  // データを5行目から貼り付け
+  const targetRange = logSheet.getRange(5, 4, todayData.length, 1);
   targetRange.setValues(todayData);
   
   // 4. 前日データと比較して差分を通知
-  if (logSheet.getLastColumn() >= 3) {
-    const yesterdayData = logSheet.getRange(4, 3, todayData.length, 1).getValues();
+  if (logSheet.getLastColumn() >= 5) {  // 5列目のデータと比較
+    const yesterdayData = logSheet.getRange(5, 5, todayData.length, 1).getValues();
     let message = '';
     
     for (let i = 0; i < todayData.length; i++) {
       if (todayData[i][0] !== yesterdayData[i][0]) {
-        message += `${i + 4}行目:\n`;
+        message += `${i + 5}行目:\n`;  // 行番号を5行目からスタート
         message += `撤去Phase: ${yesterdayData[i][0] || '空白'} → ${todayData[i][0] || '空白'}\n`;
       }
     }
