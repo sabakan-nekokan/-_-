@@ -1,73 +1,12 @@
-function dailyLogUpdate() {
-  // 1. シートの取得
-  const sourceSheet = SpreadsheetApp.openById('AS回線スプレッドシートID').getSheetByName('シート名');
-  const logSheet = SpreadsheetApp.openById('貼り付け先のスプレッドシートID').getSheetByName('ADM_AS回線');
-  
-  // 2. データの取得
-  const headers = sourceSheet.getRange('3:3').getValues()[0];
-  const phaseCol = headers.indexOf('撤去\nPhase') + 1;
-  
-  // データ範囲を取得（最終行まで全て取得）
-  const lastRow = sourceSheet.getLastRow();
-  
-  // 値とメモを別々に取得
-  const phaseData = sourceSheet.getRange(4, phaseCol, lastRow - 3, 1).getValues();
-  const phaseNotes = sourceSheet.getRange(4, phaseCol, lastRow - 3, 1).getNotes();
-  
-  // 3. データの貼り付け
-  const date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd');
-  logSheet.insertColumnsAfter(3, 1);  // 3列目の後に新しい列を挿入
-  
-  // 日付を1行目に設定
-  logSheet.getRange(1, 4).setValue(date);
-  // 2行目と3行目は空白のまま
-  
-  // ヘッダーを4行目に設定
-  logSheet.getRange(4, 4).setValue("撤去Phase");
-  
-  // データとメモを5行目から貼り付け
-  const targetRange = logSheet.getRange(5, 4, phaseData.length, 1);
-  targetRange.setValues(phaseData);  // 値の設定
-  
-  // メモを1行ずつ設定
-  for (let i = 0; i < phaseNotes.length; i++) {
-    if (phaseNotes[i][0]) {  // メモが存在する場合のみsetNote
-      logSheet.getRange(5 + i, 4).setNote(phaseNotes[i][0]);
-    }
-  }
-  
-  // 4. 前日データと比較して差分を通知
-  if (logSheet.getLastColumn() >= 5) {
-    const yesterdayValues = logSheet.getRange(5, 5, phaseData.length, 1).getValues();
-    const yesterdayNotes = logSheet.getRange(5, 5, phaseData.length, 1).getNotes();
-    let message = '';
-    
-    for (let i = 0; i < phaseData.length; i++) {
-      const valueChanged = phaseData[i][0] !== yesterdayValues[i][0];
-      const noteChanged = phaseNotes[i][0] !== yesterdayNotes[i][0];
-      
-      if (valueChanged || noteChanged) {
-        message += `${i + 5}行目:\n`;
-        
-        if (valueChanged) {
-          message += `値: ${yesterdayValues[i][0] || '空白'} → ${phaseData[i][0] || '空白'}\n`;
-        }
-        
-        if (noteChanged) {
-          message += `メモ: ${yesterdayNotes[i][0] || '空白'} → ${phaseNotes[i][0] || '空白'}\n`;
-        }
-        
-        message += '\n';  // 行の区切りのための空行
-      }
-    }
-    
-    if (message) {
-      const webhook = "https://chat.googleapis.com/v1/spaces/AAAAWiNFgzw/messages?key=AIzaSyDdl0hCZlE6yvSjMm-WEfRq3CPzqKqqsHI&token=Md4sZXHc5KO8-XFC95YRZZhT9wtoRCXFb46zSY";
-      UrlFetchApp.fetch(webhook, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify({ text: date + "の差分:\n" + message })
-      });
-    }
-  }
-}
+# 元のコード
+filterIDs = id_pass["PJ-ID"].iloc[0:].dropna().tolist()
+
+# 修正後のコード
+filterIDs = id_pass["PJ-ID"].iloc[0:].dropna().tolist()
+if len(filterIDs) > 1:
+    filterIDs = ','.join(map(str, filterIDs))
+else:
+    filterIDs = filterIDs[0]
+
+# または、より簡潔に1行で書く場合：
+filterIDs = ','.join(map(str, filterIDs)) if len(filterIDs) > 1 else filterIDs[0]
