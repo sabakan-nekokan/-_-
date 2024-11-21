@@ -10,10 +10,8 @@ function transferDataFromSlidesToSheets() {
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = spreadsheet.getSheetByName(SHEET_NAME);
     
-    // 最初のスライドを取得（必要に応じてスライド番号を変更）
+    // 最初のスライドを取得
     const slide = presentation.getSlides()[0];
-    
-    // テーブルを取得（最初のテーブルを想定）
     const table = slide.getTables()[0];
     
     // データを格納する2次元配列
@@ -24,16 +22,34 @@ function transferDataFromSlidesToSheets() {
       const row = [];
       const tableRow = table.getRow(i);
       
-      // 各セルの値を取得
       for (let j = 0; j < table.getNumColumns(); j++) {
         const cell = tableRow.getCell(j);
-        const text = cell.getText().asString().trim();
+        let text = cell.getText().asString().trim();
         
-        // 数値の場合は変換
-        const value = !isNaN(text) && text !== '' ? Number(text) : text;
+        // 数値変換の処理を改善
+        let value;
+        if (i === 0 || j === 0) {
+          // ヘッダー行とケース列はテキストとして保持
+          value = text;
+        } else {
+          // カンマを除去
+          text = text.replace(/,/g, '');
+          // パーセント記号を除去
+          text = text.replace(/%/g, '');
+          
+          if (!isNaN(text) && text !== '') {
+            // 数値に変換
+            value = Number(text);
+            // パーセントの場合は100で割る
+            if (text.includes('%')) {
+              value = value / 100;
+            }
+          } else {
+            value = text;
+          }
+        }
         row.push(value);
       }
-      
       data.push(row);
     }
     
@@ -41,18 +57,29 @@ function transferDataFromSlidesToSheets() {
     const mainDataRange = sheet.getRange(1, 1, 8, data[0].length);
     mainDataRange.setValues(data.slice(0, 8));
     
-    // 数値フォーマットを設定
-    // まずテキストとして設定
-    mainDataRange.setNumberFormat('@');
+    // 数値フォーマットの設定
+    const numRows = 8;
+    const numCols = data[0].length;
     
-    // 進捗率列（最終列）のフォーマットを設定
-    const lastColumn = data[0].length;
-    const percentageColumn = sheet.getRange(2, lastColumn, 7, 1); // 2行目から8行目まで
-    percentageColumn.setNumberFormat('0.00%');
+    // 列ごとにフォーマットを設定
+    for (let col = 1; col <= numCols; col++) {
+      const column = sheet.getRange(2, col, numRows - 1, 1); // 2行目から8行目まで
+      
+      if (col === 1) {
+        // 最初の列（案件列）はテキストフォーマット
+        column.setNumberFormat('@');
+      } else if (col === numCols) {
+        // 最後の列（進捗率）はパーセントフォーマット
+        column.setNumberFormat('0.00%');
+      } else {
+        // その他の数値列は3桁区切りのフォーマット
+        column.setNumberFormat('#,##0');
+      }
+    }
     
-    // 前回比の列は整数フォーマット
-    const previousCompareColumns = sheet.getRange(2, 4, 7, 1); // D列の数値
-    previousCompareColumns.setNumberFormat('#,##0');
+    // ヘッダー行のフォーマットをテキストに設定
+    const headerRow = sheet.getRange(1, 1, 1, numCols);
+    headerRow.setNumberFormat('@');
     
     Logger.log('データ転記が完了しました');
     
@@ -65,7 +92,7 @@ function transferDataFromSlidesToSheets() {
 function createTimeDrivenTrigger() {
   ScriptApp.newTrigger('transferDataFromSlidesToSheets')
     .timeBased()
-    .everyHours(1) // 1時間ごとに実行（必要に応じて調整）
+    .everyHours(1)
     .create();
 }
 
