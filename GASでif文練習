@@ -1,12 +1,69 @@
-# 元のコード
-filterIDs = id_pass["PJ-ID"].iloc[0:].dropna().tolist()
+function transferDataFromSlidesToSheets() {
+  // スライドとスプレッドシートのIDを設定
+  const PRESENTATION_ID = ''; // スライドのIDを入力
+  const SPREADSHEET_ID = ''; // スプレッドシートのIDを入力
+  const SHEET_NAME = ''; // シート名を入力
+  
+  try {
+    // スライドとスプレッドシートを取得
+    const presentation = SlidesApp.openById(PRESENTATION_ID);
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    
+    // 最初のスライドを取得（必要に応じてスライド番号を変更）
+    const slide = presentation.getSlides()[0];
+    
+    // テーブルを取得（最初のテーブルを想定）
+    const table = slide.getTables()[0];
+    
+    // データを格納する2次元配列
+    const data = [];
+    
+    // テーブルの各行をループ
+    for (let i = 0; i < table.getNumRows(); i++) {
+      const row = [];
+      const tableRow = table.getRow(i);
+      
+      // 各セルの値を取得
+      for (let j = 0; j < table.getNumColumns(); j++) {
+        const cell = tableRow.getCell(j);
+        const text = cell.getText().asString().trim();
+        
+        // 数値の場合は変換
+        const value = !isNaN(text) && text !== '' ? Number(text) : text;
+        row.push(value);
+      }
+      
+      data.push(row);
+    }
+    
+    // スプレッドシートにデータを書き込む
+    // 既存のデータをクリア
+    sheet.clear();
+    
+    // 新しいデータを書き込む
+    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    
+    // 数値フォーマットを設定
+    const range = sheet.getRange(1, 1, data.length, data[0].length);
+    range.setNumberFormat('@'); // 一旦テキストとして設定
+    
+    // パーセンテージの列を特定して設定
+    const lastColumn = data[0].length;
+    const percentageColumn = sheet.getRange(2, lastColumn, data.length - 1, 1);
+    percentageColumn.setNumberFormat('0.00%');
+    
+    Logger.log('データ転記が完了しました');
+    
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error);
+  }
+}
 
-# 修正後のコード
-filterIDs = id_pass["PJ-ID"].iloc[0:].dropna().tolist()
-if len(filterIDs) > 1:
-    filterIDs = ','.join(map(str, filterIDs))
-else:
-    filterIDs = filterIDs[0]
-
-# または、より簡潔に1行で書く場合：
-filterIDs = ','.join(map(str, filterIDs)) if len(filterIDs) > 1 else filterIDs[0]
+// トリガーを設定する関数
+function createTimeDrivenTrigger() {
+  ScriptApp.newTrigger('transferDataFromSlidesToSheets')
+    .timeBased()
+    .everyHours(1) // 1時間ごとに実行（必要に応じて調整）
+    .create();
+}
