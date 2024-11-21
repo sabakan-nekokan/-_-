@@ -37,21 +37,22 @@ function transferDataFromSlidesToSheets() {
       data.push(row);
     }
     
-    // スプレッドシートにデータを書き込む
-    // 既存のデータをクリア
-    sheet.clear();
-    
-    // 新しいデータを書き込む
-    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    // メインデータ部分の更新（1行目から8行目まで）
+    const mainDataRange = sheet.getRange(1, 1, 8, data[0].length);
+    mainDataRange.setValues(data.slice(0, 8));
     
     // 数値フォーマットを設定
-    const range = sheet.getRange(1, 1, data.length, data[0].length);
-    range.setNumberFormat('@'); // 一旦テキストとして設定
+    // まずテキストとして設定
+    mainDataRange.setNumberFormat('@');
     
-    // パーセンテージの列を特定して設定
+    // 進捗率列（最終列）のフォーマットを設定
     const lastColumn = data[0].length;
-    const percentageColumn = sheet.getRange(2, lastColumn, data.length - 1, 1);
+    const percentageColumn = sheet.getRange(2, lastColumn, 7, 1); // 2行目から8行目まで
     percentageColumn.setNumberFormat('0.00%');
+    
+    // 前回比の列は整数フォーマット
+    const previousCompareColumns = sheet.getRange(2, 4, 7, 1); // D列の数値
+    previousCompareColumns.setNumberFormat('#,##0');
     
     Logger.log('データ転記が完了しました');
     
@@ -66,4 +67,9 @@ function createTimeDrivenTrigger() {
     .timeBased()
     .everyHours(1) // 1時間ごとに実行（必要に応じて調整）
     .create();
+}
+
+// 手動実行用の関数
+function manualRun() {
+  transferDataFromSlidesToSheets();
 }
