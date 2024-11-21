@@ -24,30 +24,7 @@ function transferDataFromSlidesToSheets() {
       
       for (let j = 0; j < table.getNumColumns(); j++) {
         const cell = tableRow.getCell(j);
-        let text = cell.getText().asString().trim();
-        
-        // 数値変換の処理を改善
-        let value;
-        if (i === 0 || j === 0) {
-          // ヘッダー行とケース列はテキストとして保持
-          value = text;
-        } else {
-          // カンマを除去
-          text = text.replace(/,/g, '');
-          // パーセント記号を除去
-          text = text.replace(/%/g, '');
-          
-          if (!isNaN(text) && text !== '') {
-            // 数値に変換
-            value = Number(text);
-            // パーセントの場合は100で割る
-            if (text.includes('%')) {
-              value = value / 100;
-            }
-          } else {
-            value = text;
-          }
-        }
+        const value = cell.getText().asString().trim();
         row.push(value);
       }
       data.push(row);
@@ -56,30 +33,6 @@ function transferDataFromSlidesToSheets() {
     // メインデータ部分の更新（1行目から8行目まで）
     const mainDataRange = sheet.getRange(1, 1, 8, data[0].length);
     mainDataRange.setValues(data.slice(0, 8));
-    
-    // 数値フォーマットの設定
-    const numRows = 8;
-    const numCols = data[0].length;
-    
-    // 列ごとにフォーマットを設定
-    for (let col = 1; col <= numCols; col++) {
-      const column = sheet.getRange(2, col, numRows - 1, 1); // 2行目から8行目まで
-      
-      if (col === 1) {
-        // 最初の列（案件列）はテキストフォーマット
-        column.setNumberFormat('@');
-      } else if (col === numCols) {
-        // 最後の列（進捗率）はパーセントフォーマット
-        column.setNumberFormat('0.00%');
-      } else {
-        // その他の数値列は3桁区切りのフォーマット
-        column.setNumberFormat('#,##0');
-      }
-    }
-    
-    // ヘッダー行のフォーマットをテキストに設定
-    const headerRow = sheet.getRange(1, 1, 1, numCols);
-    headerRow.setNumberFormat('@');
     
     Logger.log('データ転記が完了しました');
     
