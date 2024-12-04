@@ -20,33 +20,53 @@ function sendWebhookNotification(message) {
   }
 }
 
-// リトライ用デコレーター
-function withRetry(func, maxRetries = 3, delayMs = 1000) {
-  return function (...args) {
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return func.apply(this, args);
-      } catch (error) {
-        lastError = error;
-        console.log(`Retry attempt ${attempt}/${maxRetries}: ${error.message}`);
-        
-        if (attempt < maxRetries) {
-          Utilities.sleep(delayMs * attempt);
-        }
-      }
-    }
-    
-    throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
-  };
+// トリガー設定用の関数
+function setRetryTrigger(functionName, minutes = 5, maxRetries = 3) {
+  // 既存のトリガーを確認
+  const triggers = ScriptApp.getProjectTriggers();
+  const existingTrigger = triggers.find(trigger => 
+    trigger.getHandlerFunction() === functionName && 
+    trigger.getUniqueId().startsWith('retry_')
+  );
+  
+  // 既存のトリガーがある場合はスキップ
+  if (existingTrigger) {
+    console.log('Retry trigger already exists');
+    return;
+  }
+  
+  // スクリプトのプロパティを取得
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const retryCount = parseInt(scriptProperties.getProperty('retryCount') || '0');
+  
+  // 最大リトライ回数を超えていないか確認
+  if (retryCount >= maxRetries) {
+    console.log(`Max retries (${maxRetries}) reached`);
+    scriptProperties.deleteProperty('retryCount');
+    sendWebhookNotification(`❌ 最大リトライ回数(${maxRetries}回)に到達しました。手動での確認が必要です。`);
+    return;
+  }
+  
+  // 次回実行時間を設定
+  const triggerTime = new Date();
+  triggerTime.setMinutes(triggerTime.getMinutes() + minutes);
+  
+  // トリガーを作成
+  const trigger = ScriptApp.newTrigger(functionName)
+    .timeBased()
+    .at(triggerTime)
+    .create();
+  
+  // リトライカウントを増やして保存
+  scriptProperties.setProperty('retryCount', (retryCount + 1).toString());
+  
+  console.log(`Retry trigger set for ${triggerTime} (${retryCount + 1}/${maxRetries})`);
 }
 
 function RemoveIRecordscol2() {
   try {
     console.log("処理開始: RemoveIRecordscol2");
     
-    // スプレッドシートを開く
     const spreadsheet = SpreadsheetApp.openById("17NfUqM6s6zJ1HMx4ywTevd9Gw16taaSZTbFS7dUv0Ko");
     if (!spreadsheet) throw new Error("ソーススプレッドシートが開けません");
     
@@ -55,7 +75,6 @@ function RemoveIRecordscol2() {
     
     console.log("データシートの読み込み完了");
     
-    // カラムインデックスの取得
     const dataColumn = datasheet.getRange(1, 1, 1, datasheet.getLastColumn()).getValues()[0];
     const exNo = dataColumn.indexOf('案件実行状況') + 1;
     const phNo = dataColumn.indexOf('撤去Phase') + 1;
@@ -67,7 +86,6 @@ function RemoveIRecordscol2() {
     
     console.log("カラムインデックス取得完了");
     
-    // データの処理
     const dataArray = datasheet.getRange(1, 1, datasheet.getLastRow(), datasheet.getLastColumn()).getValues();
     const filteredArray = [];
     
@@ -85,37 +103,28 @@ function RemoveIRecordscol2() {
     
     console.log(`フィルター後のデータ数: ${filteredArray.length}件`);
     
-    // データの書き込み（リトライ機能付き）
-    const writeToSheet = withRetry(function() {
-      const spreadsheet2 = SpreadsheetApp.openById("1fV0Th048DR0iVgP_fyNT-_NDdfGnYXcS1DnephXMSWw");
-      const sheet = spreadsheet2.getSheetByName("FY24_3Q以降");
-      
-      if (!sheet) throw new Error("ターゲットシートが見つかりません");
-      
-      // シートが空でない場合のみclearContentを実行
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        const range = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
-        range.clearContent();
-      }
-      
-      // 新しいデータがある場合のみsetValues
-      if (filteredArray.length > 0) {
-        sheet.getRange(2, 1, filteredArray.length, filteredArray[0].length)
-             .setValues(filteredArray);
-      }
-      
-      return filteredArray.length;
-    });
+    const spreadsheet2 = SpreadsheetApp.openById("1fV0Th048DR0iVgP_fyNT-_NDdfGnYXcS1DnephXMSWw");
+    const sheet = spreadsheet2.getSheetByName("FY24_3Q以降");
     
-    const processedRows = writeToSheet();
+    if (!sheet) throw new Error("ターゲットシートが見つかりません");
     
-    console.log(`処理完了: ${processedRows}件`);
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const range = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
+      range.clearContent();
+    }
+    
+    if (filteredArray.length > 0) {
+      sheet.getRange(2, 1, filteredArray.length, filteredArray[0].length)
+           .setValues(filteredArray);
+    }
+    
+    PropertiesService.getScriptProperties().deleteProperty('retryCount');
+    console.log(`処理完了: ${filteredArray.length}件`);
     
   } catch (error) {
-    const errorMessage = `❌ エラーが発生しました\n${error.message}\n実行時刻: ${new Date().toLocaleString('ja-JP')}`;
-    console.error(errorMessage);
-    sendWebhookNotification(errorMessage);
+    console.error(`エラーが発生しました: ${error.message}`);
+    setRetryTrigger('RemoveIRecordscol2', 5, 3);
     throw error;
   }
 }
