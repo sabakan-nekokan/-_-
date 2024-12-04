@@ -1,55 +1,121 @@
-function transferDataFromSlidesToSheets() {
-  // スライドとスプレッドシートのIDを設定
-  const PRESENTATION_ID = ''; // スライドのIDを入力
-  const SPREADSHEET_ID = ''; // スプレッドシートのIDを入力
-  const SHEET_NAME = ''; // シート名を入力
-  
+// Webhook通知用の設定
+const WEBHOOK_URL = 'YOUR_WEBHOOK_URL'; 
+
+// Webhook通知用関数
+function sendWebhookNotification(message) {
   try {
-    // スライドとスプレッドシートを取得
-    const presentation = SlidesApp.openById(PRESENTATION_ID);
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME);
+    const payload = {
+      "text": message
+    };
     
-    // 最初のスライドを取得
-    const slide = presentation.getSlides()[0];
-    const table = slide.getTables()[0];
+    const options = {
+      'method': 'post',
+      'contentType': 'application/json',
+      'payload': JSON.stringify(payload)
+    };
     
-    // データを格納する2次元配列
-    const data = [];
-    
-    // テーブルの各行をループ
-    for (let i = 0; i < table.getNumRows(); i++) {
-      const row = [];
-      const tableRow = table.getRow(i);
-      
-      for (let j = 0; j < table.getNumColumns(); j++) {
-        const cell = tableRow.getCell(j);
-        const value = cell.getText().asString().trim();
-        row.push(value);
-      }
-      data.push(row);
-    }
-    
-    // メインデータ部分の更新（1行目から8行目まで）
-    const mainDataRange = sheet.getRange(1, 1, 8, data[0].length);
-    mainDataRange.setValues(data.slice(0, 8));
-    
-    Logger.log('データ転記が完了しました');
-    
+    UrlFetchApp.fetch(WEBHOOK_URL, options);
   } catch (error) {
-    Logger.log('エラーが発生しました: ' + error);
+    console.error('Webhook notification failed:', error);
   }
 }
 
-// トリガーを設定する関数
-function createTimeDrivenTrigger() {
-  ScriptApp.newTrigger('transferDataFromSlidesToSheets')
-    .timeBased()
-    .everyHours(1)
-    .create();
+// リトライ用デコレーター
+function withRetry(func, maxRetries = 3, delayMs = 1000) {
+  return function (...args) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return func.apply(this, args);
+      } catch (error) {
+        lastError = error;
+        console.log(`Retry attempt ${attempt}/${maxRetries}: ${error.message}`);
+        
+        if (attempt < maxRetries) {
+          Utilities.sleep(delayMs * attempt);
+        }
+      }
+    }
+    
+    throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError.message}`);
+  };
 }
 
-// 手動実行用の関数
-function manualRun() {
-  transferDataFromSlidesToSheets();
+function RemoveIRecordscol2() {
+  try {
+    console.log("処理開始: RemoveIRecordscol2");
+    
+    // スプレッドシートを開く
+    const spreadsheet = SpreadsheetApp.openById("17NfUqM6s6zJ1HMx4ywTevd9Gw16taaSZTbFS7dUv0Ko");
+    if (!spreadsheet) throw new Error("ソーススプレッドシートが開けません");
+    
+    const datasheet = spreadsheet.getSheetByName("DB_撤去案件_詳細");
+    if (!datasheet) throw new Error("シートが見つかりません");
+    
+    console.log("データシートの読み込み完了");
+    
+    // カラムインデックスの取得
+    const dataColumn = datasheet.getRange(1, 1, 1, datasheet.getLastColumn()).getValues()[0];
+    const exNo = dataColumn.indexOf('案件実行状況') + 1;
+    const phNo = dataColumn.indexOf('撤去Phase') + 1;
+    const deNo = dataColumn.indexOf('レコード削除日') + 1;
+    
+    if (exNo === 0 || phNo === 0 || deNo === 0) {
+      throw new Error("必要なカラムが見つかりません");
+    }
+    
+    console.log("カラムインデックス取得完了");
+    
+    // データの処理
+    const dataArray = datasheet.getRange(1, 1, datasheet.getLastRow(), datasheet.getLastColumn()).getValues();
+    const filteredArray = [];
+    
+    for (let i = 0; i < dataArray.length; i++) {
+      if (((dataArray[i][exNo - 1].match("実行中") || dataArray[i][exNo - 1].match("保留")) && (
+          dataArray[i][phNo - 1].match("3G") ||
+          dataArray[i][phNo - 1].match("FY24_BB") ||
+          dataArray[i][phNo - 1].match("FY24_XQ") ||
+          dataArray[i][phNo - 1].match("FY25_XQ") ||
+          dataArray[i][phNo - 1].match("FY26_XQ") ||
+          dataArray[i][phNo - 1] === "") && dataArray[i][deNo - 1] === "")) {
+        filteredArray.push(dataArray[i]);
+      }
+    }
+    
+    console.log(`フィルター後のデータ数: ${filteredArray.length}件`);
+    
+    // データの書き込み（リトライ機能付き）
+    const writeToSheet = withRetry(function() {
+      const spreadsheet2 = SpreadsheetApp.openById("1fV0Th048DR0iVgP_fyNT-_NDdfGnYXcS1DnephXMSWw");
+      const sheet = spreadsheet2.getSheetByName("FY24_3Q以降");
+      
+      if (!sheet) throw new Error("ターゲットシートが見つかりません");
+      
+      // シートが空でない場合のみclearContentを実行
+      const lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        const range = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn());
+        range.clearContent();
+      }
+      
+      // 新しいデータがある場合のみsetValues
+      if (filteredArray.length > 0) {
+        sheet.getRange(2, 1, filteredArray.length, filteredArray[0].length)
+             .setValues(filteredArray);
+      }
+      
+      return filteredArray.length;
+    });
+    
+    const processedRows = writeToSheet();
+    
+    console.log(`処理完了: ${processedRows}件`);
+    
+  } catch (error) {
+    const errorMessage = `❌ エラーが発生しました\n${error.message}\n実行時刻: ${new Date().toLocaleString('ja-JP')}`;
+    console.error(errorMessage);
+    sendWebhookNotification(errorMessage);
+    throw error;
+  }
 }
