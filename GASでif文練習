@@ -1,23 +1,44 @@
-function createDailyTriggers() {
-  // 既存のトリガーをクリーンアップ
-  const triggers = ScriptApp.getProjectTriggers();
-  triggers.forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'RemoveIRecordscol2') {
-      ScriptApp.deleteTrigger(trigger);
+function copySheetValues() {
+  // 元のスプレッドシートとコピー先のスプレッドシートのIDを設定
+  const sourceSpreadsheetId = 'ソーススプレッドシートのIDをここに入れてください';
+  const targetSpreadsheetId = 'コピー先スプレッドシートのIDをここに入れてください';
+  
+  // シート名を設定
+  const sourceSheetName = 'コピーしたいシートの名前';
+  const targetSheetName = 'コピー先のシート名';
+  
+  try {
+    // スプレッドシートを開く
+    const sourceSpreadsheet = SpreadsheetApp.openById(sourceSpreadsheetId);
+    const targetSpreadsheet = SpreadsheetApp.openById(targetSpreadsheetId);
+    
+    // シートを取得
+    const sourceSheet = sourceSpreadsheet.getSheetByName(sourceSheetName);
+    let targetSheet = targetSpreadsheet.getSheetByName(targetSheetName);
+    
+    // コピー先のシートが存在しない場合は新規作成
+    if (!targetSheet) {
+      targetSheet = targetSpreadsheet.insertSheet(targetSheetName);
     }
-  });
-
-  // 午前のトリガーを設定
-  ScriptApp.newTrigger('RemoveIRecordscol2')
-    .timeBased()
-    .everyDays(1)
-    .atHour(10)
-    .create();
-
-  // 午後のトリガーを設定
-  ScriptApp.newTrigger('RemoveIRecordscol2')
-    .timeBased()
-    .everyDays(1)
-    .atHour(17)
-    .create();
+    
+    // データ範囲を取得
+    const lastRow = sourceSheet.getLastRow();
+    const lastColumn = sourceSheet.getLastColumn();
+    
+    // 値のみを取得
+    const values = sourceSheet.getRange(1, 1, lastRow, lastColumn).getValues();
+    
+    // コピー先のシートをクリア
+    targetSheet.clear();
+    
+    // 値を転記
+    if (values.length > 0) {
+      targetSheet.getRange(1, 1, values.length, values[0].length).setValues(values);
+    }
+    
+    Logger.log('コピーが完了しました');
+    
+  } catch (error) {
+    Logger.log('エラーが発生しました: ' + error);
+  }
 }
