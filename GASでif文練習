@@ -1,44 +1,57 @@
-function copySheetValues() {
-  // 元のスプレッドシートとコピー先のスプレッドシートのIDを設定
-  const sourceSpreadsheetId = 'ソーススプレッドシートのIDをここに入れてください';
-  const targetSpreadsheetId = 'コピー先スプレッドシートのIDをここに入れてください';
+function filterSpreadsheetData() {
+  // ソーススプレッドシートのID
+  const SOURCE_SPREADSHEET_ID = '【ソーススプレッドシートのIDを入れてください】';
+  // ソースシート名
+  const SOURCE_SHEET_NAME = '【ソースシートの名前を入れてください】';
+  // 貼り付け先のシート名
+  const DESTINATION_SHEET_NAME = '【貼り付け先シートの名前を入れてください】';
   
-  // シート名を設定
-  const sourceSheetName = 'コピーしたいシートの名前';
-  const targetSheetName = 'コピー先のシート名';
+  // ソーススプレッドシートを取得
+  const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+  const sourceSheet = sourceSpreadsheet.getSheetByName(SOURCE_SHEET_NAME);
   
-  try {
-    // スプレッドシートを開く
-    const sourceSpreadsheet = SpreadsheetApp.openById(sourceSpreadsheetId);
-    const targetSpreadsheet = SpreadsheetApp.openById(targetSpreadsheetId);
-    
-    // シートを取得
-    const sourceSheet = sourceSpreadsheet.getSheetByName(sourceSheetName);
-    let targetSheet = targetSpreadsheet.getSheetByName(targetSheetName);
-    
-    // コピー先のシートが存在しない場合は新規作成
-    if (!targetSheet) {
-      targetSheet = targetSpreadsheet.insertSheet(targetSheetName);
-    }
-    
-    // データ範囲を取得
-    const lastRow = sourceSheet.getLastRow();
-    const lastColumn = sourceSheet.getLastColumn();
-    
-    // 値のみを取得
-    const values = sourceSheet.getRange(1, 1, lastRow, lastColumn).getValues();
-    
-    // コピー先のシートをクリア
-    targetSheet.clear();
-    
-    // 値を転記
-    if (values.length > 0) {
-      targetSheet.getRange(1, 1, values.length, values[0].length).setValues(values);
-    }
-    
-    Logger.log('コピーが完了しました');
-    
-  } catch (error) {
-    Logger.log('エラーが発生しました: ' + error);
+  // 貼り付け先のスプレッドシートを取得（このスクリプトが紐付いているスプレッドシート）
+  const destinationSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const destinationSheet = destinationSpreadsheet.getSheetByName(DESTINATION_SHEET_NAME);
+  
+  // データ範囲を取得（ヘッダー行を含む）
+  const dataRange = sourceSheet.getDataRange();
+  const values = dataRange.getValues();
+  
+  // ヘッダー行を取得し、必要な列のインデックスを特定
+  const headers = values[0];
+  const idIndex = headers.indexOf('ID');
+  const numberIndex = headers.indexOf('番号');
+  const codeIndex = headers.indexOf('コード');
+  const rackNameIndex = headers.indexOf('ラック名');
+  const woIdIndex = headers.indexOf('WOID');
+  const subProjectIndex = headers.indexOf('案件サブ');
+  
+  // フィルター条件に合うデータを抽出
+  const filteredData = values.slice(1).filter(row => {
+    return row[subProjectIndex].toString().includes('3G');
+  }).map(row => {
+    return [
+      row[idIndex],
+      row[numberIndex],
+      row[codeIndex],
+      row[rackNameIndex],
+      row[woIdIndex]
+    ];
+  });
+  
+  // 貼り付け先シートの既存データをクリア
+  // ヘッダー行（1行目）より下のデータのみをクリア
+  const lastRow = destinationSheet.getLastRow();
+  if (lastRow > 1) {  // データが存在する場合のみクリア
+    destinationSheet.getRange(2, 1, lastRow - 1, destinationSheet.getLastColumn()).clearContent();
   }
+  
+  // フィルターされたデータを出力
+  if (filteredData.length > 0) {
+    destinationSheet.getRange(2, 1, filteredData.length, 5).setValues(filteredData);
+  }
+  
+  // 列幅を自動調整
+  destinationSheet.autoResizeColumns(1, 5);
 }
