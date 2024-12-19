@@ -1,47 +1,34 @@
-function updateCell() {
+function getMonthlyValue() {
+  // スプレッドシートを取得
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getActiveSheet();
+  const sheet = ss.getSheetByName("先週分"); // シート名を適切に変更してください
   
-  // B2セルから月を抽出
-  const cellB2 = sheet.getRange("B2").getValue();
-  const monthMatch = cellB2.match(/(\d+)月/);
+  // 現在の日付から当月と来月のyyyy/m形式の文字列を作成
+  const now = new Date();
+  const thisMonth = Utilities.formatDate(now, 'JST', 'yyyy/M');
   
-  if (!monthMatch) {
-    throw new Error("月の値が見つかりません");
-  }
+  // 来月の日付を計算
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1);
+  const nextMonthStr = Utilities.formatDate(nextMonth, 'JST', 'yyyy/M');
   
-  // 抽出した月の値を取得（1つ前の月）
-  const month = parseInt(monthMatch[1]) + 1;
+  // ヘッダー行（3行目）の値を取得
+  const headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
   
-  // 先週分シートを取得
-  const lastWeekSheet = ss.getSheetByName("先週分");
-  
-  // ヘッダー行（3行目）から対象の列を探す
-  const headerRange = lastWeekSheet.getRange(3, 1, 1, lastWeekSheet.getLastColumn());
-  const headerValues = headerRange.getValues()[0];
-  
-  // 現在の年を取得
-  const currentYear = new Date().getFullYear();
-  
-  // yyyy/mの形式で比較する文字列を作成
-  const targetDate = `${currentYear}/${month}`;
-  
-  // 対象の列を検索
-  let targetColumn = -1;
-  for (let i = 0; i < headerValues.length; i++) {
-    if (headerValues[i] === targetDate) {
-      targetColumn = i + 1;
+  // 当月と来月の列インデックスを検索
+  let targetColumnIndex = -1;
+  for (let i = 0; i < headers.length; i++) {
+    const headerValue = headers[i];
+    if (headerValue == thisMonth || headerValue == nextMonthStr) {
+      targetColumnIndex = i + 1; // 1-based indexing
       break;
     }
   }
   
-  if (targetColumn === -1) {
-    throw new Error("対象の列が見つかりません");
+  // 対象の列が見つかった場合、48行目の値を取得してC2に設定
+  if (targetColumnIndex > 0) {
+    const targetValue = sheet.getRange(48, targetColumnIndex).getValue();
+    sheet.getRange("C2").setValue(targetValue);
+  } else {
+    Logger.log("対象の月が見つかりませんでした");
   }
-  
-  // 48行目の値を取得
-  const targetValue = lastWeekSheet.getRange(48, targetColumn).getValue();
-  
-  // C2セルに値を記入
-  sheet.getRange("C2").setValue(targetValue);
 }
