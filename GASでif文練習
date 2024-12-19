@@ -7,9 +7,9 @@ function updateColors() {
   copyColors(sheet, "O9:Z9", "O10:Z10");
   copyColors(sheet, "AA9:AD9", "AA10:AD10");
   
-  // 2. 左端の色を全体にコピー
-  copyColors(sheet, "A11:A20", "C11:AD20");
-  copyColors(sheet, "A21:A30", "C21:AD30");
+  // 2. 左端の色を全体にコピー（行ごとに処理）
+  copyColorsExpandRow(sheet, "A11:A20", "C11:AD20");
+  copyColorsExpandRow(sheet, "A21:A30", "C21:AD30");
   
   // 3. 来月の列に黄色を設定
   highlightNextMonth();
@@ -25,6 +25,28 @@ function copyColors(sheet, sourceRange, targetRange) {
   
   // 背景色を設定
   target.setBackgrounds(colors);
+}
+
+function copyColorsExpandRow(sheet, sourceRange, targetRange) {
+  // 範囲を取得
+  const source = sheet.getRange(sourceRange);
+  const target = sheet.getRange(targetRange);
+  
+  // 背景色を取得
+  const colors = source.getBackgrounds();
+  
+  // 対象範囲の行数と列数を取得
+  const numRows = colors.length;
+  const numTargetCols = target.getNumColumns();
+  
+  // 各行の色を展開
+  const expandedColors = colors.map(row => {
+    const color = row[0];  // 元の色
+    return Array(numTargetCols).fill(color);  // 色を必要な数だけ複製
+  });
+  
+  // 背景色を設定
+  target.setBackgrounds(expandedColors);
 }
 
 function highlightNextMonth() {
@@ -48,7 +70,7 @@ function highlightNextMonth() {
     const headerDate = new Date(headerValues[i]);
     
     if (headerDate.getMonth() === nextMonth && headerDate.getFullYear() === nextYear) {
-      const columnNumber = i + 3; // C列が3番目
+      const columnNumber = i + 3;
       const targetRange = sheet.getRange(10, columnNumber, 21, 1);
       targetRange.setBackground("#FFFF00");
       
