@@ -1,57 +1,60 @@
-function filterSpreadsheetData() {
-  // ソーススプレッドシートのID
-  const SOURCE_SPREADSHEET_ID = '【ソーススプレッドシートのIDを入れてください】';
-  // ソースシート名
-  const SOURCE_SHEET_NAME = '【ソースシートの名前を入れてください】';
-  // 貼り付け先のシート名
-  const DESTINATION_SHEET_NAME = '【貼り付け先シートの名前を入れてください】';
+function updateColors() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = spreadsheet.getActiveSheet();
   
-  // ソーススプレッドシートを取得
-  const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
-  const sourceSheet = sourceSpreadsheet.getSheetByName(SOURCE_SHEET_NAME);
+  // 1. ヘッダー部分の色をコピー
+  copyColors(sheet, "C9:N9", "C10:N10");
+  copyColors(sheet, "O9:Z9", "O10:Z10");
+  copyColors(sheet, "AA9:AD9", "AA10:AD10");
   
-  // 貼り付け先のスプレッドシートを取得（このスクリプトが紐付いているスプレッドシート）
-  const destinationSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const destinationSheet = destinationSpreadsheet.getSheetByName(DESTINATION_SHEET_NAME);
+  // 2. 左端の色を全体にコピー
+  copyColors(sheet, "A11:A20", "C11:AD20");
+  copyColors(sheet, "A21:A30", "C21:AD30");
   
-  // データ範囲を取得（ヘッダー行を含む）
-  const dataRange = sourceSheet.getDataRange();
-  const values = dataRange.getValues();
+  // 3. 来月の列に黄色を設定
+  highlightNextMonth();
+}
+
+function copyColors(sheet, sourceRange, targetRange) {
+  // 範囲を取得
+  const source = sheet.getRange(sourceRange);
+  const target = sheet.getRange(targetRange);
   
-  // ヘッダー行を取得し、必要な列のインデックスを特定
-  const headers = values[0];
-  const idIndex = headers.indexOf('ID');
-  const numberIndex = headers.indexOf('番号');
-  const codeIndex = headers.indexOf('コード');
-  const rackNameIndex = headers.indexOf('ラック名');
-  const woIdIndex = headers.indexOf('WOID');
-  const subProjectIndex = headers.indexOf('案件サブ');
+  // 背景色を取得
+  const colors = source.getBackgrounds();
   
-  // フィルター条件に合うデータを抽出
-  const filteredData = values.slice(1).filter(row => {
-    return row[subProjectIndex].toString().includes('3G');
-  }).map(row => {
-    return [
-      row[idIndex],
-      row[numberIndex],
-      row[codeIndex],
-      row[rackNameIndex],
-      row[woIdIndex]
-    ];
-  });
+  // 背景色を設定
+  target.setBackgrounds(colors);
+}
+
+function highlightNextMonth() {
+  const sheet = SpreadsheetApp.getActiveSheet();
   
-  // 貼り付け先シートの既存データをクリア
-  // ヘッダー行（1行目）より下のデータのみをクリア
-  const lastRow = destinationSheet.getLastRow();
-  if (lastRow > 1) {  // データが存在する場合のみクリア
-    destinationSheet.getRange(2, 1, lastRow - 1, destinationSheet.getLastColumn()).clearContent();
+  // ヘッダー範囲から日付を取得
+  const headerRange = sheet.getRange("C10:AD10");
+  const headerValues = headerRange.getValues()[0];
+  
+  // 現在の日付から来月を計算
+  const today = new Date();
+  let nextMonth = today.getMonth() + 1;
+  let nextYear = today.getFullYear();
+  if (nextMonth > 11) {
+    nextMonth = 0;
+    nextYear++;
   }
   
-  // フィルターされたデータを出力
-  if (filteredData.length > 0) {
-    destinationSheet.getRange(2, 1, filteredData.length, 5).setValues(filteredData);
+  // 来月の列を探して黄色に設定
+  for (let i = 0; i < headerValues.length; i++) {
+    const headerDate = new Date(headerValues[i]);
+    
+    if (headerDate.getMonth() === nextMonth && headerDate.getFullYear() === nextYear) {
+      const columnNumber = i + 3; // C列が3番目
+      const targetRange = sheet.getRange(10, columnNumber, 21, 1);
+      targetRange.setBackground("#FFFF00");
+      
+      Logger.log("Column highlighted: " + columnNumber);
+      Logger.log("Range: " + targetRange.getA1Notation());
+      break;
+    }
   }
-  
-  // 列幅を自動調整
-  destinationSheet.autoResizeColumns(1, 5);
 }
