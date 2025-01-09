@@ -1,42 +1,38 @@
-function getMonthlyValue() {
-  // スプレッドシートを取得
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName("先週分"); // シート名を適切に変更してください
+function writeEmailContent(searchText, destination, subject, body) {
+  // アクティブなスプレッドシートを取得
+  const sheet = SpreadsheetApp.getActiveSheet();
   
-  // 現在の日付から当月と来月のyyyy/m形式の文字列を作成
-  const now = new Date();
-  const thisMonth = Utilities.formatDate(now, 'JST', 'yyyy/M');
+  // データの範囲を取得（2行目から最終行まで、1列目のみ）
+  const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1);
+  const values = dataRange.getValues();
   
-  // 来月の日付を計算
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1);
-  const nextMonthStr = Utilities.formatDate(nextMonth, 'JST', 'yyyy/M');
-  
-  console.log(nextMonthStr);  // デバッグ用
-  
-  // ヘッダー行（3行目）の値を取得
-  const headers = sheet.getRange(3, 1, 1, sheet.getLastColumn()).getValues()[0];
-  
-  // 当月と来月の列インデックスを検索
-  let targetColumnIndex = -1;
-  for (let i = 0; i < headers.length; i++) {
-    // ヘッダーの値が日付オブジェクトの場合、同じフォーマットに変換
-    const headerDate = new Date(headers[i]);
-    if (headerDate instanceof Date && !isNaN(headerDate)) {
-      const headerValue = Utilities.formatDate(headerDate, 'JST', 'yyyy/M');
-      console.log(headerValue);  // デバッグ用
+  // 検索文言と一致するセルを探す
+  for (let i = 0; i < values.length; i++) {
+    if (values[i][0] === searchText) {
+      // 一致したセルの行番号（配列のインデックスは0から始まるため、+2して2行目からの位置を計算）
+      const matchRow = i + 2;
       
-      if (headerValue === thisMonth || headerValue === nextMonthStr) {
-        targetColumnIndex = i + 1; // 1-based indexing
-        break;
-      }
+      // 宛先を書き込む（一致したセルの1行下）
+      sheet.getRange(matchRow + 1, 1).setValue(destination);
+      
+      // 件名を書き込む（宛先の1行下）
+      sheet.getRange(matchRow + 2, 1).setValue(subject);
+      
+      // 本文を書き込む（件名の1行下）
+      sheet.getRange(matchRow + 3, 1).setValue(body);
+      
+      // 一致したセルが見つかったら処理を終了
+      break;
     }
   }
-  
-  // 対象の列が見つかった場合、48行目の値を取得してC2に設定
-  if (targetColumnIndex > 0) {
-    const targetValue = sheet.getRange(48, targetColumnIndex).getValue();
-    sheet.getRange("C2").setValue(targetValue);
-  } else {
-    Logger.log("対象の月が見つかりませんでした");
-  }
+}
+
+// 使用例
+function example() {
+  writeEmailContent(
+    "検索する文言",  // 検索文言
+    "test@example.com",  // 宛先
+    "テストメール",  // 件名
+    "これはテストメールです。"  // 本文
+  );
 }
