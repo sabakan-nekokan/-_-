@@ -2,24 +2,25 @@ function writeEmailContent(searchText, destination, subject, body) {
   // アクティブなスプレッドシートを取得
   const sheet = SpreadsheetApp.getActiveSheet();
   
-  // データの範囲を取得（2行目から最終行まで、1列目のみ）
-  const dataRange = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1);
+  // データの範囲を取得（2行目から最終行まで、全列）
+  const lastColumn = sheet.getLastColumn();
+  const dataRange = sheet.getRange(2, 1, 1, lastColumn);
   const values = dataRange.getValues();
   
   // 検索文言と一致するセルを探す
-  for (let i = 0; i < values.length; i++) {
-    if (values[i][0] === searchText) {
-      // 一致したセルの行番号（配列のインデックスは0から始まるため、+2して2行目からの位置を計算）
-      const matchRow = i + 2;
+  for (let j = 0; j < values[0].length; j++) {
+    if (values[0][j] === searchText) {
+      // 一致したセルの列番号
+      const matchColumn = j + 1;
       
       // 宛先を書き込む（一致したセルの1行下）
-      sheet.getRange(matchRow + 1, 1).setValue(destination);
+      sheet.getRange(3, matchColumn).setValue(destination);
       
       // 件名を書き込む（宛先の1行下）
-      sheet.getRange(matchRow + 2, 1).setValue(subject);
+      sheet.getRange(4, matchColumn).setValue(subject);
       
       // 本文を書き込む（件名の1行下）
-      sheet.getRange(matchRow + 3, 1).setValue(body);
+      sheet.getRange(5, matchColumn).setValue(body);
       
       // 一致したセルが見つかったら処理を終了
       break;
