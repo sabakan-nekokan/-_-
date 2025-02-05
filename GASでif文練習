@@ -1,39 +1,44 @@
-function writeEmailContent(searchText, destination, subject, body) {
-  // アクティブなスプレッドシートを取得
-  const sheet = SpreadsheetApp.getActiveSheet();
+function backupSpreadsheet() {
+  // 元のスプレッドシートを取得
+  const sourceSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceFile = DriveApp.getFileById(sourceSpreadsheet.getId());
   
-  // データの範囲を取得（2行目から最終行まで、全列）
-  const lastColumn = sheet.getLastColumn();
-  const dataRange = sheet.getRange(2, 1, 1, lastColumn);
-  const values = dataRange.getValues();
+  // 新しいファイル名を作成（元のファイル名 + yyyyMMdd）
+  const today = new Date();
+  const dateString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyyMMdd');
+  const newFileName = `${sourceFile.getName()}_${dateString}`;
   
-  // 検索文言と一致するセルを探す
-  for (let j = 0; j < values[0].length; j++) {
-    if (values[0][j] === searchText) {
-      // 一致したセルの列番号
-      const matchColumn = j + 1;
+  // 保存先フォルダのID（実際のフォルダIDに置き換えてください）
+  const DESTINATION_FOLDER_ID = 'フォルダIDをここに入力';
+  const destinationFolder = DriveApp.getFolderById(DESTINATION_FOLDER_ID);
+  
+  // スプレッドシートをコピー
+  const newFile = sourceFile.makeCopy(newFileName, destinationFolder);
+  const newSpreadsheet = SpreadsheetApp.openById(newFile.getId());
+  
+  // 全シートを処理
+  const sheets = newSpreadsheet.getSheets();
+  for (const sheet of sheets) {
+    const sheetName = sheet.getName();
+    
+    // [data]値シートと[個別watch]シートは値張りに変換
+    if (sheetName === '[data]値' || sheetName === '[個別watch]') {
+      const range = sheet.getDataRange();
+      const values = range.getValues();
       
-      // 宛先を書き込む（一致したセルの1行下）
-      sheet.getRange(3, matchColumn).setValue(destination);
+      // importrangeを値に変換
+      const newSheet = newSpreadsheet.insertSheet(sheetName + '_temp');
+      newSheet.getRange(1, 1, values.length, values[0].length).setValues(values);
       
-      // 件名を書き込む（宛先の1行下）
-      sheet.getRange(4, matchColumn).setValue(subject);
-      
-      // 本文を書き込む（件名の1行下）
-      sheet.getRange(5, matchColumn).setValue(body);
-      
-      // 一致したセルが見つかったら処理を終了
-      break;
+      // 元のシートを削除し、一時シートをリネーム
+      newSpreadsheet.deleteSheet(sheet);
+      newSheet.setName(sheetName);
     }
   }
-}
-
-// 使用例
-function example() {
-  writeEmailContent(
-    "検索する文言",  // 検索文言
-    "test@example.com",  // 宛先
-    "テストメール",  // 件名
-    "これはテストメールです。"  // 本文
-  );
+  
+  // スプレッドシートを保存
+  newSpreadsheet.saveAndClose();
+  
+  // 完了メッセージをログに出力
+  console.log(`バックアップが完了しました: ${newFileName}`);
 }
