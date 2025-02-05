@@ -1,44 +1,26 @@
-function backupSpreadsheet() {
-  // 元のスプレッドシートを取得
-  const sourceSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sourceFile = DriveApp.getFileById(sourceSpreadsheet.getId());
+function getSheetData() {
+  const sourceId = 'あなたのスプレッドシートID';
+  const sheets = ['工事進捗', '進捗サマリ', 'DF情報', 'DF情報進捗サマリ', 'コスト予実'];
+  const source = SpreadsheetApp.openById(sourceId);
+  const target = SpreadsheetApp.getActiveSpreadsheet();
   
-  // 新しいファイル名を作成（元のファイル名 + yyyyMMdd）
-  const today = new Date();
-  const dateString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyyMMdd');
-  const newFileName = `${sourceFile.getName()}_${dateString}`;
-  
-  // 保存先フォルダのID（実際のフォルダIDに置き換えてください）
-  const DESTINATION_FOLDER_ID = 'フォルダIDをここに入力';
-  const destinationFolder = DriveApp.getFolderById(DESTINATION_FOLDER_ID);
-  
-  // スプレッドシートをコピー
-  const newFile = sourceFile.makeCopy(newFileName, destinationFolder);
-  const newSpreadsheet = SpreadsheetApp.openById(newFile.getId());
-  
-  // 全シートを処理
-  const sheets = newSpreadsheet.getSheets();
-  for (const sheet of sheets) {
-    const sheetName = sheet.getName();
-    
-    // [data]値シートと[個別watch]シートは値張りに変換
-    if (sheetName === '[data]値' || sheetName === '[個別watch]') {
-      const range = sheet.getDataRange();
-      const values = range.getValues();
+  sheets.forEach(name => {
+    try {
+      const sourceSheet = source.getSheetByName(name);
+      const data = sourceSheet.getDataRange().getValues();
       
-      // importrangeを値に変換
-      const newSheet = newSpreadsheet.insertSheet(sheetName + '_temp');
-      newSheet.getRange(1, 1, values.length, values[0].length).setValues(values);
-      
-      // 元のシートを削除し、一時シートをリネーム
-      newSpreadsheet.deleteSheet(sheet);
-      newSheet.setName(sheetName);
+      let targetSheet = target.getSheetByName(name) || target.insertSheet(name);
+      targetSheet.clear();
+      targetSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    } catch (e) {
+      Logger.log(`Error in ${name}: ${e.message}`);
     }
-  }
-  
-  // スプレッドシートを保存
-  newSpreadsheet.saveAndClose();
-  
-  // 完了メッセージをログに出力
-  console.log(`バックアップが完了しました: ${newFileName}`);
+  });
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('データ転送')
+    .addItem('シートデータを取得', 'getSheetData')
+    .addToUi();
 }
