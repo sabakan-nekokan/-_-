@@ -1,40 +1,42 @@
 /**
- * 条件に一致するレコードの最新日付を取得する関数
- * - ターゲットシートE列とソースシートN列が一致
- * - ターゲットシートF列とソースシートO列が一致
- * - 条件を満たすレコードのBL列の中で最新の日付を返す
- * @return {Date|null} - 最新日付または条件に一致するデータがない場合はnull
+ * 条件に一致するレコードの最新日付を取得しQ列に貼り付ける関数
  */
-function getLatestMatchingDate() {
+function processData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const targetSheet = ss.getSheetByName("ターゲットシート");
-  const sourceSheet = ss.getSheetByName("ソースシート");
+  const sourceSheet = ss.getSheetByName("工事進捗");
   
-  // ターゲットシートのE列とF列の値を取得
-  const targetE = targetSheet.getRange("E2").getValue();
-  const targetF = targetSheet.getRange("F2").getValue();
+  // ターゲットシートのデータを取得
+  const targetData = targetSheet.getDataRange().getValues();
   
-  // ソースシートのデータを取得
+  // 工事進捗シートのデータを取得
   const sourceData = sourceSheet.getDataRange().getValues();
-  let latestDate = null;
   
-  // ヘッダー行をスキップして処理
-  for (let i = 1; i < sourceData.length; i++) {
-    const row = sourceData[i];
-    const sourceN = row[13];  // N列 (インデックスは0から)
-    const sourceO = row[14];  // O列
-    const sourceBL = row[63]; // BL列
+  // ターゲットシートの各行を処理
+  for (let i = 1; i < targetData.length; i++) {
+    const targetE = targetData[i][4]; // E列 (0から始まるので4)
+    const targetF = targetData[i][5]; // F列 (0から始まるので5)
     
-    // 条件チェック: E=N かつ F=O
-    if (targetE === sourceN && targetF === sourceO) {
-      // BL列の値が有効な日付で、現在の最新日付より新しい場合に更新
-      if (sourceBL instanceof Date && !isNaN(sourceBL.getTime())) {
-        if (latestDate === null || sourceBL > latestDate) {
-          latestDate = sourceBL;
+    let latestDate = null;
+    
+    // 条件に一致するレコードを探し、BL列の最新日付を取得
+    for (let j = 1; j < sourceData.length; j++) {
+      const sourceN = sourceData[j][13]; // N列 (0から始まるので13)
+      const sourceO = sourceData[j][14]; // O列 (0から始まるので14)
+      const sourceBL = sourceData[j][63]; // BL列 (0から始まるので63)
+      
+      // 条件チェック: E=N かつ F=O
+      if (targetE === sourceN && targetF === sourceO) {
+        // BL列の値が日付であり、かつ現在の最新日付よりも新しい場合
+        if (sourceBL instanceof Date && !isNaN(sourceBL.getTime())) {
+          if (latestDate === null || sourceBL > latestDate) {
+            latestDate = sourceBL;
+          }
         }
       }
     }
+    
+    // Q列に値を設定（該当するものがなければnull、つまり空白になる）
+    targetSheet.getRange(`Q${i+1}`).setValue(latestDate);
   }
-  
-  return latestDate;
 }
