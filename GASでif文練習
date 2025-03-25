@@ -1,42 +1,56 @@
-/**
- * 条件に一致するレコードの最新日付を取得しQ列に貼り付ける関数
- */
-function processData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const targetSheet = ss.getSheetByName("ターゲットシート");
-  const sourceSheet = ss.getSheetByName("工事進捗");
+function RemoveIRecordscol() {
+  const CHUNK_SIZE = 5000; // 5000行ずつ処理
+  const spreadsheet = SpreadsheetApp.openById("17NfUqM6s6zJ1HMx4ywTevd9Gw16taaSZTbFS7dUv0ko");
+  const datasheet = spreadsheet.getSheetByName("DB_撤去案件_詳細");
   
-  // ターゲットシートのデータを取得
-  const targetData = targetSheet.getDataRange().getValues();
+  // 列インデックスを取得
+  var dataColumn = datasheet.getRange(1, 1, 1, datasheet.getLastColumn()).getValues()[0];
+  var exNo = dataColumn.indexOf('案件実行状況');
+  var phNo = dataColumn.indexOf('撤去Phase');
+  var deNo = dataColumn.indexOf('レコード削除日');
+  console.log(deNo);
+
+  const totalRows = datasheet.getLastRow();
+  let filteredArray = [];
   
-  // 工事進捗シートのデータを取得
-  const sourceData = sourceSheet.getDataRange().getValues();
-  
-  // ターゲットシートの各行を処理
-  for (let i = 1; i < targetData.length; i++) {
-    const targetE = targetData[i][4]; // E列 (0から始まるので4)
-    const targetF = targetData[i][5]; // F列 (0から始まるので5)
+  // 分割処理：5000行ずつデータを読み込む
+  for (let startRow = 2; startRow <= totalRows; startRow += CHUNK_SIZE) {
+    const endRow = Math.min(startRow + CHUNK_SIZE - 1, totalRows);
+    const rowCount = endRow - startRow + 1;
     
-    let latestDate = null;
+    // 現在のチャンクを読み込む
+    const dataChunk = datasheet.getRange(
+      startRow, 
+      1, 
+      rowCount, 
+      datasheet.getLastColumn()
+    ).getValues();
     
-    // 条件に一致するレコードを探し、BL列の最新日付を取得
-    for (let j = 1; j < sourceData.length; j++) {
-      const sourceN = sourceData[j][13]; // N列 (0から始まるので13)
-      const sourceO = sourceData[j][14]; // O列 (0から始まるので14)
-      const sourceBL = sourceData[j][63]; // BL列 (0から始まるので63)
-      
-      // 条件チェック: E=N かつ F=O
-      if (targetE === sourceN && targetF === sourceO) {
-        // BL列の値が日付であり、かつ現在の最新日付よりも新しい場合
-        if (sourceBL instanceof Date && !isNaN(sourceBL.getTime())) {
-          if (latestDate === null || sourceBL > latestDate) {
-            latestDate = sourceBL;
-          }
-        }
+    // フィルタリング処理
+    for (let i = 0; i < dataChunk.length; i++) {
+      if((dataChunk[i][exNo].match("実行中") || dataChunk[i][exNo].match("保留")) && 
+         (dataChunk[i][phNo].match("FY23_3Q") || 
+          dataChunk[i][phNo].match("FY23_4Q") || 
+          dataChunk[i][phNo].match("FY23_5Q_01") || 
+          dataChunk[i][phNo].match("FY24") || 
+          dataChunk[i][phNo] == "" && dataChunk[i][deNo] == "")) {
+        filteredArray.push(dataChunk[i]);
       }
     }
     
-    // Q列に値を設定（該当するものがなければnull、つまり空白になる）
-    targetSheet.getRange(`Q${i+1}`).setValue(latestDate);
+    // スクリプトのタイムアウトを防ぐための短い休止
+    Utilities.sleep(50);
   }
+
+  const lastrow = filteredArray.length;
+  const lastcolum = filteredArray[0].length;
+  
+  const spreadsheet2 = SpreadsheetApp.openById("1WqtJoCq1Tu1IGRWEAyPzAcXN_nYdRX7wvylbyZ4Y1dQ");
+  const sheet = spreadsheet2.getSheetByName("撤去案件_詳細_FY23_3Q以降&保留");
+  const range = sheet.getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn());
+  range.clearContent();
+  
+  sheet.getRange(2, 1, lastrow, lastcolum).setValues(filteredArray);
+  
+  console.log("撤去案件_詳細_FY23_3Q以降&保留 SS 転記OK");
 }
