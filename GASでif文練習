@@ -1,20 +1,31 @@
 /**
- * 指定したシート間で特定の列範囲のデータをコピーする汎用関数
- * シートオブジェクトを直接渡すバージョン（異なるスプレッドシート間でも動作）
+ * 指定した複数の特定列（連続していない列）をコピーする関数
  * 
  * @param {Sheet} sourceSheet - コピー元シートオブジェクト
  * @param {Sheet} targetSheet - コピー先シートオブジェクト
- * @param {number} startCol - 開始列番号（例: A列は1、B列は2...）
- * @param {number} colCount - コピーする列数
+ * @param {Array} columnLetters - コピーする列の文字（例: ['BR', 'BS', 'CH', 'CI']）
  * @param {number} batchSize - 一度に処理する行数（パフォーマンス調整用、デフォルト1000）
  * @return {boolean} - 処理の成功・失敗
  */
-function copyColumnsDataBetweenSheets(sourceSheet, targetSheet, startCol, colCount, batchSize = 1000) {
+function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetters, batchSize = 1000) {
   try {
     if (!sourceSheet || !targetSheet) {
       Logger.log("エラー: 有効なシートオブジェクトが提供されていません");
       return false;
     }
+    
+    // 列文字から列番号への変換ヘルパー関数
+    function columnLetterToNumber(letter) {
+      let column = 0;
+      const length = letter.length;
+      for (let i = 0; i < length; i++) {
+        column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+      }
+      return column;
+    }
+    
+    // 列文字を列番号に変換
+    const columnNumbers = columnLetters.map(letter => columnLetterToNumber(letter));
     
     // フィルターがあれば一時的に解除
     if (targetSheet.getFilter()) {
@@ -22,36 +33,55 @@ function copyColumnsDataBetweenSheets(sourceSheet, targetSheet, startCol, colCou
     }
     
     // コピー元シートの最終行を取得
-    const lastRow = sourceSheet.getLastRow();
-    if (lastRow === 0) {
-      Logger.log("警告: コピー元シートにデータがありません");
+    let lastRow = 0;
+    try {
+      lastRow = sourceSheet.getLastRow();
+      if (lastRow === 0) {
+        Logger.log("警告: コピー元シートにデータがありません");
+        return false;
+      }
+    } catch (e) {
+      Logger.log("最終行の取得に失敗しました: " + e.message);
       return false;
     }
     
-    // バッチ処理でデータをコピー
-    for (let startRow = 1; startRow <= lastRow; startRow += batchSize) {
-      // 現在のバッチの行数を計算（最後のバッチは少なくなる可能性あり）
-      const currentBatchRows = Math.min(batchSize, lastRow - startRow + 1);
+    // 各列ごとに処理
+    for (let colIndex = 0; colIndex < columnNumbers.length; colIndex++) {
+      const columnNumber = columnNumbers[colIndex];
+      const columnLetter = columnLetters[colIndex];
       
-      // 現在のバッチのデータを取得
-      const sourceRange = sourceSheet.getRange(startRow, startCol, currentBatchRows, colCount);
-      const sourceData = sourceRange.getValues();
+      // バッチ処理でデータをコピー
+      for (let startRow = 1; startRow <= lastRow; startRow += batchSize) {
+        // 現在のバッチの行数を計算
+        const currentBatchRows = Math.min(batchSize, lastRow - startRow + 1);
+        
+        // 現在の列のデータを取得
+        const sourceRange = sourceSheet.getRange(startRow, columnNumber, currentBatchRows, 1);
+        const sourceData = sourceRange.getValues();
+        
+        // データを対象シートに貼り付け
+        const targetRange = targetSheet.getRange(startRow, columnNumber, currentBatchRows, 1);
+        targetRange.setValues(sourceData);
+        
+        // 処理の進捗を記録
+        Logger.log(`列 ${columnLetter} の行 ${startRow} から ${startRow + currentBatchRows - 1} までを処理しました`);
+        
+        // 処理負荷軽減のための短い休止
+        if (startRow + batchSize <= lastRow) {
+          Utilities.sleep(50);
+        }
+      }
       
-      // データを対象シートに貼り付け
-      const targetRange = targetSheet.getRange(startRow, startCol, currentBatchRows, colCount);
-      targetRange.setValues(sourceData);
+      Logger.log(`列 ${columnLetter} のコピーが完了しました`);
       
-      // 処理の進捗を記録
-      Logger.log(`行 ${startRow} から ${startRow + currentBatchRows - 1} までを処理しました`);
-      
-      // 処理が重くなりすぎないよう短い休止を入れる
-      if (startRow + batchSize <= lastRow) {
+      // 列間の処理でも短い休止を入れる
+      if (colIndex < columnNumbers.length - 1) {
         Utilities.sleep(100);
       }
     }
     
     // 実行完了のログを出力
-    Logger.log(`列 ${startCol}～${startCol + colCount - 1} のコピーが完了しました`);
+    Logger.log(`指定した列 ${columnLetters.join(', ')} のコピーが全て完了しました`);
     return true;
   } catch (error) {
     Logger.log(`エラーが発生しました: ${error.message}`);
@@ -60,9 +90,16 @@ function copyColumnsDataBetweenSheets(sourceSheet, targetSheet, startCol, colCou
 }
 
 /**
- * 異なるスプレッドシート間でP列からR列をコピーする使用例
+ * BR, BS, CH, CI列をコピーする具体的な使用例
  */
-function copyPtoRColumnsBetweenSpreadsheets() {
+function copyBrBsChCiColumns(sourceSheet, targetSheet) {
+  return copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, ['BR', 'BS', 'CH', 'CI']);
+}
+
+/**
+ * 異なるスプレッドシート間でBR, BS, CH, CI列をコピーする例
+ */
+function copySpecificColumnsBetweenSpreadsheets() {
   try {
     // ソーススプレッドシートを取得（IDを指定）
     const sourceSpreadsheet = SpreadsheetApp.openById("ソーススプレッドシートのIDをここに入力");
@@ -72,38 +109,10 @@ function copyPtoRColumnsBetweenSpreadsheets() {
     const targetSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const targetSheet = targetSpreadsheet.getSheetByName("ターゲットシート名");
     
-    // P列(16)からR列(18)までコピー
-    return copyColumnsDataBetweenSheets(sourceSheet, targetSheet, 16, 3);
+    // BR, BS, CH, CI列をコピー
+    return copyBrBsChCiColumns(sourceSheet, targetSheet);
   } catch (error) {
     Logger.log(`スプレッドシートの取得中にエラーが発生しました: ${error.message}`);
     return false;
   }
-}
-
-/**
- * 既存のシート変数を使用する例（外部から渡されたシート変数を使用する場合）
- * 
- * // この関数は以下のような形で呼び出すことを想定:
- * function exampleUsage() {
- *   // 既に取得済みのシート変数
- *   const sourceSheet = SpreadsheetApp.openById("ID").getSheetByName("シート名");
- *   const targetSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("シート名");
- *   
- *   // P列からR列をコピー
- *   copyUsingExistingSheetVariables(sourceSheet, targetSheet);
- * }
- */
-function copyUsingExistingSheetVariables(sourceSheet, targetSheet) {
-  // P列(16)からR列(18)までコピー
-  return copyColumnsDataBetweenSheets(sourceSheet, targetSheet, 16, 3);
-}
-
-/**
- * メニューから実行できるようにするためのセットアップ関数
- */
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('カスタム機能')
-    .addItem('別スプレッドシートからP〜R列をコピー', 'copyPtoRColumnsBetweenSpreadsheets')
-    .addToUi();
 }
