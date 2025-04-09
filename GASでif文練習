@@ -5,9 +5,10 @@
  * @param {Sheet} targetSheet - コピー先シートオブジェクト
  * @param {Array} columnLetters - コピーする列の文字（例: ['BR', 'BS', 'CH', 'CI']）
  * @param {number} batchSize - 一度に処理する行数（パフォーマンス調整用、デフォルト1000）
+ * @param {number} headerRows - ヘッダー行数（デフォルト1）
  * @return {boolean} - 処理の成功・失敗
  */
-function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetters, batchSize = 1000) {
+function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetters, batchSize = 1000, headerRows = 1) {
   try {
     if (!sourceSheet || !targetSheet) {
       Logger.log("エラー: 有効なシートオブジェクトが提供されていません");
@@ -50,8 +51,18 @@ function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetter
       const columnNumber = columnNumbers[colIndex];
       const columnLetter = columnLetters[colIndex];
       
-      // バッチ処理でデータをコピー
-      for (let startRow = 1; startRow <= lastRow; startRow += batchSize) {
+      // ヘッダー部分を先にコピー
+      if (headerRows > 0) {
+        const headerSourceRange = sourceSheet.getRange(1, columnNumber, headerRows, 1);
+        const headerSourceData = headerSourceRange.getValues();
+        const headerTargetRange = targetSheet.getRange(1, columnNumber, headerRows, 1);
+        headerTargetRange.setValues(headerSourceData);
+        Logger.log(`列 ${columnLetter} のヘッダー部分をコピーしました`);
+      }
+      
+      // データ部分をバッチ処理でコピー
+      const startDataRow = headerRows + 1;
+      for (let startRow = startDataRow; startRow <= lastRow; startRow += batchSize) {
         // 現在のバッチの行数を計算
         const currentBatchRows = Math.min(batchSize, lastRow - startRow + 1);
         
@@ -91,9 +102,10 @@ function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetter
 
 /**
  * BR, BS, CH, CI列をコピーする具体的な使用例
+ * ヘッダー行数を2行に指定した例
  */
 function copyBrBsChCiColumns(sourceSheet, targetSheet) {
-  return copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, ['BR', 'BS', 'CH', 'CI']);
+  return copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, ['BR', 'BS', 'CH', 'CI'], 1000, 2);
 }
 
 /**
