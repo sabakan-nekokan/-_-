@@ -1,56 +1,100 @@
-function RemoveIRecordscol() {
-  const CHUNK_SIZE = 5000; // 5000行ずつ処理
-  const spreadsheet = SpreadsheetApp.openById("17NfUqM6s6zJ1HMx4ywTevd9Gw16taaSZTbFS7dUv0ko");
-  const datasheet = spreadsheet.getSheetByName("DB_撤去案件_詳細");
-  
-  // 列インデックスを取得
-  var dataColumn = datasheet.getRange(1, 1, 1, datasheet.getLastColumn()).getValues()[0];
-  var exNo = dataColumn.indexOf('案件実行状況');
-  var phNo = dataColumn.indexOf('撤去Phase');
-  var deNo = dataColumn.indexOf('レコード削除日');
-  console.log(deNo);
-
-  const totalRows = datasheet.getLastRow();
-  let filteredArray = [];
-  
-  // 分割処理：5000行ずつデータを読み込む
-  for (let startRow = 2; startRow <= totalRows; startRow += CHUNK_SIZE) {
-    const endRow = Math.min(startRow + CHUNK_SIZE - 1, totalRows);
-    const rowCount = endRow - startRow + 1;
+/**
+ * 指定したシート間で特定の列範囲のデータをコピーする汎用関数
+ * @param {string} sourceSheetName - コピー元シート名
+ * @param {string} targetSheetName - コピー先シート名
+ * @param {number} startCol - 開始列番号（例: A列は1、B列は2...）
+ * @param {number} colCount - コピーする列数
+ * @param {number} batchSize - 一度に処理する行数（パフォーマンス調整用、デフォルト1000）
+ * @return {boolean} - 処理の成功・失敗
+ */
+function copyColumnsData(sourceSheetName, targetSheetName, startCol, colCount, batchSize = 1000) {
+  try {
+    // スプレッドシートを取得
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     
-    // 現在のチャンクを読み込む
-    const dataChunk = datasheet.getRange(
-      startRow, 
-      1, 
-      rowCount, 
-      datasheet.getLastColumn()
-    ).getValues();
+    // コピー元のシート
+    const sourceSheet = ss.getSheetByName(sourceSheetName);
+    if (!sourceSheet) {
+      Logger.log(`エラー: コピー元シート "${sourceSheetName}" が見つかりません`);
+      return false;
+    }
     
-    // フィルタリング処理
-    for (let i = 0; i < dataChunk.length; i++) {
-      if((dataChunk[i][exNo].match("実行中") || dataChunk[i][exNo].match("保留")) && 
-         (dataChunk[i][phNo].match("FY23_3Q") || 
-          dataChunk[i][phNo].match("FY23_4Q") || 
-          dataChunk[i][phNo].match("FY23_5Q_01") || 
-          dataChunk[i][phNo].match("FY24") || 
-          dataChunk[i][phNo] == "" && dataChunk[i][deNo] == "")) {
-        filteredArray.push(dataChunk[i]);
+    // コピー先のシート
+    const targetSheet = ss.getSheetByName(targetSheetName);
+    if (!targetSheet) {
+      Logger.log(`エラー: コピー先シート "${targetSheetName}" が見つかりません`);
+      return false;
+    }
+    
+    // フィルターがあれば一時的に解除
+    if (targetSheet.getFilter()) {
+      targetSheet.getFilter().remove();
+    }
+    
+    // コピー元シートの最終行を取得
+    const lastRow = sourceSheet.getLastRow();
+    if (lastRow === 0) {
+      Logger.log(`警告: コピー元シート "${sourceSheetName}" にデータがありません`);
+      return false;
+    }
+    
+    // バッチ処理でデータをコピー
+    for (let startRow = 1; startRow <= lastRow; startRow += batchSize) {
+      // 現在のバッチの行数を計算（最後のバッチは少なくなる可能性あり）
+      const currentBatchRows = Math.min(batchSize, lastRow - startRow + 1);
+      
+      // 現在のバッチのデータを取得
+      const sourceRange = sourceSheet.getRange(startRow, startCol, currentBatchRows, colCount);
+      const sourceData = sourceRange.getValues();
+      
+      // データを対象シートに貼り付け
+      const targetRange = targetSheet.getRange(startRow, startCol, currentBatchRows, colCount);
+      targetRange.setValues(sourceData);
+      
+      // 処理の進捗を記録
+      Logger.log(`行 ${startRow} から ${startRow + currentBatchRows - 1} までを処理しました`);
+      
+      // 処理が重くなりすぎないよう短い休止を入れる
+      if (startRow + batchSize <= lastRow) {
+        Utilities.sleep(100);
       }
     }
     
-    // スクリプトのタイムアウトを防ぐための短い休止
-    Utilities.sleep(50);
+    // 実行完了のログを出力
+    Logger.log(`"${sourceSheetName}" から "${targetSheetName}" への列 ${startCol}～${startCol + colCount - 1} のコピーが完了しました`);
+    return true;
+  } catch (error) {
+    Logger.log(`エラーが発生しました: ${error.message}`);
+    return false;
   }
+}
 
-  const lastrow = filteredArray.length;
-  const lastcolum = filteredArray[0].length;
+/**
+ * P列からR列をコピーする具体的な例（オリジナルの実装と同等）
+ */
+function copyPtoRColumns() {
+  // P列は16列目、R列は18列目なので、開始列=16、列数=3を指定
+  return copyColumnsData("Sheet1", "Sheet2", 16, 3);
+}
+
+/**
+ * カスタム列範囲をコピーする例
+ */
+function copyCustomColumns() {
+  // 例: A列からC列までコピー (A=1, C=3なので、開始列=1、列数=3)
+  return copyColumnsData("シート1", "シート2", 1, 3);
   
-  const spreadsheet2 = SpreadsheetApp.openById("1WqtJoCq1Tu1IGRWEAyPzAcXN_nYdRX7wvylbyZ4Y1dQ");
-  const sheet = spreadsheet2.getSheetByName("撤去案件_詳細_FY23_3Q以降&保留");
-  const range = sheet.getRange(2, 1, sheet.getLastRow(), sheet.getLastColumn());
-  range.clearContent();
-  
-  sheet.getRange(2, 1, lastrow, lastcolum).setValues(filteredArray);
-  
-  console.log("撤去案件_詳細_FY23_3Q以降&保留 SS 転記OK");
+  // 例: D列からF列までコピー (D=4, F=6なので、開始列=4、列数=3)
+  // return copyColumnsData("シート1", "シート2", 4, 3);
+}
+
+/**
+ * メニューから実行できるようにするためのセットアップ関数
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('カスタム機能')
+    .addItem('P〜R列をコピー', 'copyPtoRColumns')
+    .addItem('カスタム範囲コピー', 'copyCustomColumns')
+    .addToUi();
 }
