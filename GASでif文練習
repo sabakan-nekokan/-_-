@@ -1,28 +1,18 @@
 /**
  * 指定したシート間で特定の列範囲のデータをコピーする汎用関数
- * @param {string} sourceSheetName - コピー元シート名
- * @param {string} targetSheetName - コピー先シート名
+ * シートオブジェクトを直接渡すバージョン（異なるスプレッドシート間でも動作）
+ * 
+ * @param {Sheet} sourceSheet - コピー元シートオブジェクト
+ * @param {Sheet} targetSheet - コピー先シートオブジェクト
  * @param {number} startCol - 開始列番号（例: A列は1、B列は2...）
  * @param {number} colCount - コピーする列数
  * @param {number} batchSize - 一度に処理する行数（パフォーマンス調整用、デフォルト1000）
  * @return {boolean} - 処理の成功・失敗
  */
-function copyColumnsData(sourceSheetName, targetSheetName, startCol, colCount, batchSize = 1000) {
+function copyColumnsDataBetweenSheets(sourceSheet, targetSheet, startCol, colCount, batchSize = 1000) {
   try {
-    // スプレッドシートを取得
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // コピー元のシート
-    const sourceSheet = ss.getSheetByName(sourceSheetName);
-    if (!sourceSheet) {
-      Logger.log(`エラー: コピー元シート "${sourceSheetName}" が見つかりません`);
-      return false;
-    }
-    
-    // コピー先のシート
-    const targetSheet = ss.getSheetByName(targetSheetName);
-    if (!targetSheet) {
-      Logger.log(`エラー: コピー先シート "${targetSheetName}" が見つかりません`);
+    if (!sourceSheet || !targetSheet) {
+      Logger.log("エラー: 有効なシートオブジェクトが提供されていません");
       return false;
     }
     
@@ -34,7 +24,7 @@ function copyColumnsData(sourceSheetName, targetSheetName, startCol, colCount, b
     // コピー元シートの最終行を取得
     const lastRow = sourceSheet.getLastRow();
     if (lastRow === 0) {
-      Logger.log(`警告: コピー元シート "${sourceSheetName}" にデータがありません`);
+      Logger.log("警告: コピー元シートにデータがありません");
       return false;
     }
     
@@ -61,7 +51,7 @@ function copyColumnsData(sourceSheetName, targetSheetName, startCol, colCount, b
     }
     
     // 実行完了のログを出力
-    Logger.log(`"${sourceSheetName}" から "${targetSheetName}" への列 ${startCol}～${startCol + colCount - 1} のコピーが完了しました`);
+    Logger.log(`列 ${startCol}～${startCol + colCount - 1} のコピーが完了しました`);
     return true;
   } catch (error) {
     Logger.log(`エラーが発生しました: ${error.message}`);
@@ -70,22 +60,42 @@ function copyColumnsData(sourceSheetName, targetSheetName, startCol, colCount, b
 }
 
 /**
- * P列からR列をコピーする具体的な例（オリジナルの実装と同等）
+ * 異なるスプレッドシート間でP列からR列をコピーする使用例
  */
-function copyPtoRColumns() {
-  // P列は16列目、R列は18列目なので、開始列=16、列数=3を指定
-  return copyColumnsData("Sheet1", "Sheet2", 16, 3);
+function copyPtoRColumnsBetweenSpreadsheets() {
+  try {
+    // ソーススプレッドシートを取得（IDを指定）
+    const sourceSpreadsheet = SpreadsheetApp.openById("ソーススプレッドシートのIDをここに入力");
+    const sourceSheet = sourceSpreadsheet.getSheetByName("ソースシート名");
+    
+    // ターゲットスプレッドシート（現在アクティブなスプレッドシート）
+    const targetSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const targetSheet = targetSpreadsheet.getSheetByName("ターゲットシート名");
+    
+    // P列(16)からR列(18)までコピー
+    return copyColumnsDataBetweenSheets(sourceSheet, targetSheet, 16, 3);
+  } catch (error) {
+    Logger.log(`スプレッドシートの取得中にエラーが発生しました: ${error.message}`);
+    return false;
+  }
 }
 
 /**
- * カスタム列範囲をコピーする例
+ * 既存のシート変数を使用する例（外部から渡されたシート変数を使用する場合）
+ * 
+ * // この関数は以下のような形で呼び出すことを想定:
+ * function exampleUsage() {
+ *   // 既に取得済みのシート変数
+ *   const sourceSheet = SpreadsheetApp.openById("ID").getSheetByName("シート名");
+ *   const targetSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("シート名");
+ *   
+ *   // P列からR列をコピー
+ *   copyUsingExistingSheetVariables(sourceSheet, targetSheet);
+ * }
  */
-function copyCustomColumns() {
-  // 例: A列からC列までコピー (A=1, C=3なので、開始列=1、列数=3)
-  return copyColumnsData("シート1", "シート2", 1, 3);
-  
-  // 例: D列からF列までコピー (D=4, F=6なので、開始列=4、列数=3)
-  // return copyColumnsData("シート1", "シート2", 4, 3);
+function copyUsingExistingSheetVariables(sourceSheet, targetSheet) {
+  // P列(16)からR列(18)までコピー
+  return copyColumnsDataBetweenSheets(sourceSheet, targetSheet, 16, 3);
 }
 
 /**
@@ -94,7 +104,6 @@ function copyCustomColumns() {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('カスタム機能')
-    .addItem('P〜R列をコピー', 'copyPtoRColumns')
-    .addItem('カスタム範囲コピー', 'copyCustomColumns')
+    .addItem('別スプレッドシートからP〜R列をコピー', 'copyPtoRColumnsBetweenSpreadsheets')
     .addToUi();
 }
