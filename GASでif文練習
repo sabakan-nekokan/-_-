@@ -1,88 +1,73 @@
 /**
- * 指定した複数の特定列（連続していない列）をコピーする関数
+ * 指定した範囲のデータをコピーする関数
  * 
  * @param {Sheet} sourceSheet - コピー元シートオブジェクト
  * @param {Sheet} targetSheet - コピー先シートオブジェクト
- * @param {Array} columnLetters - コピーする列の文字（例: ['BR', 'BS', 'CH', 'CI']）
- * @param {number} headerRows - スキップするヘッダー行数（デフォルト0）
- * @param {number} batchSize - 一度に処理する行数（パフォーマンス調整用、デフォルト1000）
+ * @param {string} startCell - 開始セル（例: "D4"）
+ * @param {string} endCell - 終了セル（例: "AE7"）
+ * @param {string} targetStartCell - コピー先の開始セル（未指定の場合は同じ位置）
  * @return {boolean} - 処理の成功・失敗
  */
-function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetters, headerRows = 0, batchSize = 1000) {
+function copyRangeBetweenSheets(sourceSheet, targetSheet, startCell, endCell, targetStartCell) {
   try {
     if (!sourceSheet || !targetSheet) {
       Logger.log("エラー: 有効なシートオブジェクトが提供されていません");
       return false;
     }
     
-    // 列文字から列番号への変換ヘルパー関数
-    function columnLetterToNumber(letter) {
-      let column = 0;
-      const length = letter.length;
-      for (let i = 0; i < length; i++) {
-        column += (letter.charCodeAt(i) - 64) * Math.pow(26, length - i - 1);
+    // セル参照から列と行の情報を抽出する関数
+    function parseCell(cellRef) {
+      // 列部分と行部分を分離（例: "AE7" → "AE" と "7"）
+      const match = cellRef.match(/([A-Z]+)([0-9]+)/);
+      if (!match) {
+        throw new Error(`無効なセル参照です: ${cellRef}`);
       }
-      return column;
+      
+      const colStr = match[1];
+      const row = parseInt(match[2]);
+      
+      // 列文字から列番号への変換
+      let colNum = 0;
+      for (let i = 0; i < colStr.length; i++) {
+        colNum = colNum * 26 + (colStr.charCodeAt(i) - 64);
+      }
+      
+      return { column: colNum, row: row };
     }
     
-    // 列文字を列番号に変換
-    const columnNumbers = columnLetters.map(letter => columnLetterToNumber(letter));
+    // 開始と終了セルの位置を解析
+    const start = parseCell(startCell);
+    const end = parseCell(endCell);
+    
+    // 範囲の行数と列数を計算
+    const numRows = end.row - start.row + 1;
+    const numCols = end.column - start.column + 1;
+    
+    // コピー先の開始位置を決定
+    let targetStart = start;  // デフォルトは同じ位置
+    if (targetStartCell) {
+      targetStart = parseCell(targetStartCell);
+    }
     
     // フィルターがあれば一時的に解除
     if (targetSheet.getFilter()) {
       targetSheet.getFilter().remove();
     }
     
-    // コピー元シートの最終行を取得
-    let lastRow = 0;
-    try {
-      lastRow = sourceSheet.getLastRow();
-      if (lastRow === 0) {
-        Logger.log("警告: コピー元シートにデータがありません");
-        return false;
-      }
-    } catch (e) {
-      Logger.log("最終行の取得に失敗しました: " + e.message);
-      return false;
-    }
+    // 範囲のデータを取得
+    const sourceRange = sourceSheet.getRange(start.row, start.column, numRows, numCols);
+    const sourceData = sourceRange.getValues();
     
-    // 各列ごとに処理
-    for (let colIndex = 0; colIndex < columnNumbers.length; colIndex++) {
-      const columnNumber = columnNumbers[colIndex];
-      const columnLetter = columnLetters[colIndex];
-      
-      // バッチ処理でデータをコピー
-      for (let startRow = 1 + headerRows; startRow <= lastRow; startRow += batchSize) {
-        // 現在のバッチの行数を計算
-        const currentBatchRows = Math.min(batchSize, lastRow - startRow + 1);
-        
-        // 現在の列のデータを取得
-        const sourceRange = sourceSheet.getRange(startRow, columnNumber, currentBatchRows, 1);
-        const sourceData = sourceRange.getValues();
-        
-        // データを対象シートに貼り付け
-        const targetRange = targetSheet.getRange(startRow, columnNumber, currentBatchRows, 1);
-        targetRange.setValues(sourceData);
-        
-        // 処理の進捗を記録
-        Logger.log(`列 ${columnLetter} の行 ${startRow} から ${startRow + currentBatchRows - 1} までを処理しました`);
-        
-        // 処理負荷軽減のための短い休止
-        if (startRow + batchSize <= lastRow) {
-          Utilities.sleep(50);
-        }
-      }
-      
-      Logger.log(`列 ${columnLetter} のコピーが完了しました`);
-      
-      // 列間の処理でも短い休止を入れる
-      if (colIndex < columnNumbers.length - 1) {
-        Utilities.sleep(100);
-      }
-    }
+    // データを対象シートに貼り付け
+    const targetRange = targetSheet.getRange(targetStart.row, targetStart.column, numRows, numCols);
+    targetRange.setValues(sourceData);
+    
+    // 必要に応じて書式もコピー
+    // sourceRange.copyFormatToRange(targetSheet, targetStart.column, targetStart.column + numCols - 1, 
+    //                             targetStart.row, targetStart.row + numRows - 1);
     
     // 実行完了のログを出力
-    Logger.log(`指定した列 ${columnLetters.join(', ')} のコピーが全て完了しました`);
+    Logger.log(`範囲 ${startCell}:${endCell} から ${targetStartCell || startCell} のコピーが完了しました`);
     return true;
   } catch (error) {
     Logger.log(`エラーが発生しました: ${error.message}`);
@@ -91,18 +76,23 @@ function copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, columnLetter
 }
 
 /**
- * BR, BS, CH, CI列をコピーする具体的な使用例
- * ヘッダー行を2行スキップする例
+ * D4からAE7の範囲をコピーする具体的な使用例
  */
-function copyBrBsChCiColumns(sourceSheet, targetSheet) {
-  // 2行のヘッダーをスキップしてコピー
-  return copySpecificColumnsBetweenSheets(sourceSheet, targetSheet, ['BR', 'BS', 'CH', 'CI'], 2);
+function copyD4ToAE7(sourceSheet, targetSheet) {
+  return copyRangeBetweenSheets(sourceSheet, targetSheet, "D4", "AE7");
 }
 
 /**
- * 異なるスプレッドシート間でBR, BS, CH, CI列をコピーする例
+ * D4からAE7の範囲を別の位置（例：G10から）にコピーする使用例
  */
-function copySpecificColumnsBetweenSpreadsheets() {
+function copyD4ToAE7WithOffset(sourceSheet, targetSheet) {
+  return copyRangeBetweenSheets(sourceSheet, targetSheet, "D4", "AE7", "G10");
+}
+
+/**
+ * 異なるスプレッドシート間で範囲をコピーする例
+ */
+function copyRangeBetweenSpreadsheets() {
   try {
     // ソーススプレッドシートを取得（IDを指定）
     const sourceSpreadsheet = SpreadsheetApp.openById("ソーススプレッドシートのIDをここに入力");
@@ -112,8 +102,8 @@ function copySpecificColumnsBetweenSpreadsheets() {
     const targetSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const targetSheet = targetSpreadsheet.getSheetByName("ターゲットシート名");
     
-    // BR, BS, CH, CI列をコピー
-    return copyBrBsChCiColumns(sourceSheet, targetSheet);
+    // D4からAE7の範囲をコピー
+    return copyD4ToAE7(sourceSheet, targetSheet);
   } catch (error) {
     Logger.log(`スプレッドシートの取得中にエラーが発生しました: ${error.message}`);
     return false;
